@@ -1,0 +1,70 @@
+{
+  "name": "taleh/course-discovery",
+  "description": "An extensible WordPress course discovery system.",
+  "license": "GPL-2.0-or-later",
+  "type": "wordpress-plugin",
+  "require": {
+    "php": "^8.5"
+  },
+  "require-dev": {
+    "brain/monkey": "^2.7.0",
+    "dealerdirect/phpcodesniffer-composer-installer": "^1.2.1",
+    "ergebnis/composer-normalize": "^2.52.0",
+    "php-parallel-lint/php-parallel-lint": "^1.4.0",
+    "phpstan/phpstan": "^2.2.5",
+    "phpstan/phpstan-phpunit": "^2.0.18",
+    "phpstan/phpstan-strict-rules": "^2.0.12",
+    "phpunit/phpunit": "^9.6.35",
+    "szepeviktor/phpstan-wordpress": "^2.0.3",
+    "wp-coding-standards/wpcs": "^3.4.0",
+    "wp-phpunit/wp-phpunit": "7.0.2",
+    "yoast/phpunit-polyfills": "^4.0.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "OxfordInternational\\CourseDiscovery\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "OxfordInternational\\CourseDiscovery\\Tests\\": "tests/"
+    }
+  },
+  "config": {
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true,
+      "ergebnis/composer-normalize": true
+    },
+    "optimize-autoloader": true,
+    "sort-packages": true
+  },
+  "scripts": {
+    "analyse": "phpstan analyse --configuration=phpstan.neon.dist --no-progress",
+    "composer:audit": "@composer audit --locked",
+    "composer:validate": [
+      "@composer validate --strict",
+      "@composer normalize --dry-run"
+    ],
+    "cs": "phpcs --standard=phpcs.xml.dist",
+    "cs:fix": "phpcbf --standard=phpcs.xml.dist",
+    "lint": "parallel-lint --exclude vendor --exclude .cache --exclude coverage course-discovery.php src templates tests",
+    "quality": [
+      "@composer:validate",
+      "@lint",
+      "@cs",
+      "@analyse",
+      "@test:unit",
+      "@test:integration",
+      "@test:feature",
+      "@composer:audit"
+    ],
+    "test": [
+      "@test:unit",
+      "@test:integration",
+      "@test:feature"
+    ],
+    "test:feature": "phpunit --configuration=phpunit.xml.dist --testsuite=feature --bootstrap=tests/bootstrap/integration.php",
+    "test:integration": "phpunit --configuration=phpunit.xml.dist --testsuite=integration --bootstrap=tests/bootstrap/integration.php",
+    "test:unit": "phpunit --configuration=phpunit.xml.dist --testsuite=unit --bootstrap=tests/bootstrap/unit.php"
+  }
+}

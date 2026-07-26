@@ -1,0 +1,24 @@
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+    - vendor/phpstan/phpstan-strict-rules/rules.neon
+    - vendor/phpstan/phpstan-phpunit/extension.neon
+    - vendor/phpstan/phpstan-phpunit/rules.neon
+
+parameters:
+    level: 8
+    paths:
+        - course-discovery.php
+        - src
+        - templates
+        - tests
+    scanFiles:
+        - tests/stubs/wp-phpunit.php
+    tmpDir: .cache/phpstan
+    excludePaths:
+        analyse:
+            - vendor/*
+            - assets/*
+            - build/*
+            - .cache/*
+            - coverage/*
+            - tests/stubs/*

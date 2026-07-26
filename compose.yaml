@@ -1,0 +1,167 @@
+name: ${COMPOSE_PROJECT_NAME:-oxford-course-discovery}
+
+x-wordpress-environment: &wordpress-environment
+  WORDPRESS_DB_HOST: database:3306
+  WORDPRESS_DB_NAME: ${DB_NAME:?Set DB_NAME in .env}
+  WORDPRESS_DB_USER: ${DB_USER:?Set DB_USER in .env}
+  WORDPRESS_DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+  WORDPRESS_TABLE_PREFIX: ${DB_TABLE_PREFIX:-wp_}
+
+x-wordpress-volumes: &wordpress-volumes
+  - wordpress_data:/var/www/html
+  - ./app/plugins/course-discovery:/var/www/html/wp-content/plugins/course-discovery
+
+x-wordpress-build: &wordpress-build
+  context: .
+  dockerfile: docker/wordpress/Dockerfile
+  args:
+    WORDPRESS_IMAGE: wordpress:7.0.2-php8.5-fpm-alpine
+    COMPOSER_IMAGE: composer:2.10.2
+
+services:
+  database:
+    image: mariadb:12.3.2-ubi10
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:?Set DB_NAME in .env}
+      MARIADB_USER: ${DB_USER:?Set DB_USER in .env}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - database_data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD
+        - healthcheck.sh
+        - --connect
+        - --innodb_initialized
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - application
+
+  test-database:
+    image: mariadb:12.3.2-ubi10
+    profiles:
+      - tools
+    environment:
+      MARIADB_DATABASE: ${TEST_DB_NAME:-wordpress_test}
+      MARIADB_USER: ${TEST_DB_USER:-wordpress_test}
+      MARIADB_PASSWORD: ${TEST_DB_PASSWORD:-wordpress_test}
+      MARIADB_ROOT_PASSWORD: ${TEST_DB_ROOT_PASSWORD:-root}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    tmpfs:
+      - /var/lib/mysql:uid=999,gid=999,mode=0770
+    healthcheck:
+      test:
+        - CMD
+        - healthcheck.sh
+        - --connect
+        - --innodb_initialized
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - application
+
+  wordpress:
+    build: *wordpress-build
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      <<: *wordpress-environment
+      WORDPRESS_DEBUG: ${WP_DEBUG:-1}
+      WORDPRESS_CONFIG_EXTRA: |
+        define( 'WP_ENVIRONMENT_TYPE', '${WP_ENVIRONMENT_TYPE:-local}' );
+        define( 'WP_HOME', '${APP_URL:-http://localhost:8080}' );
+        define( 'WP_SITEURL', '${APP_URL:-http://localhost:8080}' );
+        define( 'WP_DEBUG_LOG', true );
+        define( 'WP_DEBUG_DISPLAY', true );
+        define( 'SCRIPT_DEBUG', true );
+        define( 'DISALLOW_FILE_EDIT', true );
+    volumes: *wordpress-volumes
+    networks:
+      - application
+
+  web:
+    image: nginx:1.30.4-alpine
+    restart: unless-stopped
+    depends_on:
+      - wordpress
+    ports:
+      - ${APP_PORT:-8080}:80
+    volumes:
+      - wordpress_data:/var/www/html:ro
+      - ./app/plugins/course-discovery:/var/www/html/wp-content/plugins/course-discovery:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --output-document=-
+        - http://127.0.0.1/healthz
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - application
+
+  wp-cli:
+    image: wordpress:cli-2.12.0-php8.5
+    profiles:
+      - tools
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      <<: *wordpress-environment
+      HOME: /tmp
+    user: "82:82"
+    working_dir: /var/www/html
+    entrypoint:
+      - wp
+    command:
+      - --info
+    volumes: *wordpress-volumes
+    networks:
+      - application
+
+  composer:
+    build: *wordpress-build
+    profiles:
+      - tools
+    environment:
+      HOME: /tmp
+      WP_CORE_DIR: /usr/src/wordpress
+      WP_TESTS_DIR: /app/vendor/wp-phpunit/wp-phpunit
+      WP_TESTS_DB_HOST: test-database
+      WP_TESTS_DB_NAME: ${TEST_DB_NAME:-wordpress_test}
+      WP_TESTS_DB_USER: ${TEST_DB_USER:-wordpress_test}
+      WP_TESTS_DB_PASSWORD: ${TEST_DB_PASSWORD:-wordpress_test}
+      WP_PHPUNIT__TABLE_PREFIX: wptests_
+    user: ${HOST_UID:-1000}:${HOST_GID:-1000}
+    working_dir: /app
+    entrypoint:
+      - composer
+    volumes:
+      - ./app/plugins/course-discovery:/app
+    networks:
+      - application
+
+volumes:
+  database_data:
+  wordpress_data:
+
+networks:
+  application:

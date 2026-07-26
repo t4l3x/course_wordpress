@@ -1,0 +1,12 @@
+.git
+.gitignore
+.env
+.idea
+.vscode
+database.sql
+exports
+node_modules
+tmp
+upload
+vendor
+

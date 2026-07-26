@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<ruleset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Course Discovery" xsi:noNamespaceSchemaLocation="https://schema.phpcodesniffer.com/phpcs.xsd">
+    <description>WordPress coding standards for the Course Discovery plugin.</description>
+
+    <file>course-discovery.php</file>
+    <file>src</file>
+    <file>templates</file>
+    <file>tests</file>
+
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+    <exclude-pattern>*/assets/*</exclude-pattern>
+    <exclude-pattern>*/node_modules/*</exclude-pattern>
+    <exclude-pattern>*/build/*</exclude-pattern>
+    <exclude-pattern>*/.cache/*</exclude-pattern>
+    <exclude-pattern>*/coverage/*</exclude-pattern>
+    <exclude-pattern>tests/stubs/*</exclude-pattern>
+
+    <arg name="basepath" value="."/>
+    <arg name="colors"/>
+    <arg name="extensions" value="php"/>
+    <arg name="parallel" value="8"/>
+    <arg value="ps"/>
+
+    <config name="minimum_wp_version" value="7.0"/>
+
+    <rule ref="WordPress"/>
+
+    <rule ref="WordPress.WP.I18n">
+        <properties>
+            <property name="text_domain" type="array">
+                <element value="course-discovery"/>
+            </property>
+        </properties>
+    </rule>
+
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+        <exclude-pattern>tests/bootstrap/integration.php</exclude-pattern>
+        <exclude-pattern>tests/wp-tests-config.php</exclude-pattern>
+        <properties>
+            <property name="prefixes" type="array">
+                <element value="course_discovery"/>
+                <element value="OxfordInternational\CourseDiscovery"/>
+            </property>
+        </properties>
+    </rule>
+
+    <!-- PSR-4 class filenames intentionally differ from WordPress procedural filenames. -->
+    <rule ref="WordPress.Files.FileName">
+        <exclude-pattern>src/*</exclude-pattern>
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+
+    <!-- CLI bootstraps must report failures before WordPress and WP_Filesystem exist. -->
+    <rule ref="WordPress.WP.AlternativeFunctions.file_system_operations_fwrite">
+        <exclude-pattern>tests/bootstrap/*</exclude-pattern>
+        <exclude-pattern>tests/wp-tests-config.php</exclude-pattern>
+    </rule>
+
+    <!-- Required to pass the plugin-local test config to wp-phpunit subprocesses. -->
+    <rule ref="WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv">
+        <exclude-pattern>tests/bootstrap/integration.php</exclude-pattern>
+    </rule>
+</ruleset>

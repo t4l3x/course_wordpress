@@ -1,0 +1,31 @@
+# Local configuration and secrets
+/.env
+
+# Plugin dependencies and generated assets
+/app/plugins/course-discovery/vendor/
+
+# WordPress runtime data
+/database.sql
+/exports/
+/wp-content/
+/*.tar.gz
+/*.zip
+
+# Workspace-only files
+/tmp/
+/upload/
+
+# Plugin test and analysis output
+/app/plugins/course-discovery/.cache/
+/app/plugins/course-discovery/.phpunit.cache/
+/app/plugins/course-discovery/.phpunit.result.cache
+/app/plugins/course-discovery/coverage/
+
+# Editors and operating systems
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
