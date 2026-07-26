@@ -1,4 +1,4 @@
-# Oxford Course Discovery
+
 
 A Docker-based WordPress course discovery application. The Course Discovery
 plugin is a self-contained Composer package that can be published independently.
