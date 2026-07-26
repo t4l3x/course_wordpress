@@ -25,6 +25,13 @@ interleave, and an add failure can leave a partial new set. Transactional
 relationship or lookup tables become worthwhile only when measured scale,
 write concurrency, or consistency requirements justify their migration cost.
 
+The Course editor currently renders all available Providers and Instructors in
+native multi-select controls. This is appropriate for the assessment and for
+small-to-moderate catalogues. At larger volumes, those controls should use a
+server-backed autocomplete instead; that UI change can continue passing the
+same selected IDs to `CourseMetadataStore` without changing the persistence
+representation.
+
 ## Practical evolution
 
 As volume and query complexity grow, the system can evolve in stages:

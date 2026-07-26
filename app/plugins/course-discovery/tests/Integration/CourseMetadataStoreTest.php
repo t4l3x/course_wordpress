@@ -53,6 +53,47 @@ final class CourseMetadataStoreTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * A Course price can be removed and repeated removal remains safe.
+	 */
+	public function test_price_can_be_removed(): void {
+		$course_id = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
+		$store     = new CourseMetadataStore();
+
+		$store->save_price( $course_id, Price::from_decimal( '125.5' ) );
+		$store->remove_price( $course_id );
+		$store->remove_price( $course_id );
+
+		self::assertNull( $store->price( $course_id ) );
+		self::assertFalse( metadata_exists( 'post', $course_id->value(), CourseMeta::PRICE_KEY ) );
+	}
+
+	/**
+	 * A rejected price deletion is reported and preserves the existing value.
+	 */
+	public function test_failed_price_removal_preserves_the_existing_value(): void {
+		$course_id      = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
+		$store          = new CourseMetadataStore();
+		$reject_removal = static fn (): bool => false;
+
+		$store->save_price( $course_id, Price::from_decimal( '125.5' ) );
+		add_filter( 'delete_post_metadata', $reject_removal );
+
+		try {
+			$store->remove_price( $course_id );
+			self::fail( 'A rejected price deletion should raise an exception.' );
+		} catch ( RuntimeException $exception ) {
+			self::assertSame( 'WordPress could not remove the course price.', $exception->getMessage() );
+		} finally {
+			remove_filter( 'delete_post_metadata', $reject_removal );
+		}
+
+		$stored_price = $store->price( $course_id );
+
+		self::assertInstanceOf( Price::class, $stored_price );
+		self::assertSame( '125.5', $stored_price->decimal() );
+	}
+
+	/**
 	 * Relationships and dates use independent metadata rows and typed reads.
 	 */
 	public function test_multiple_relationships_and_start_dates_are_representable(): void {
@@ -365,8 +406,6 @@ final class CourseMetadataStoreTest extends WP_UnitTestCase {
 				'post_status' => 'publish',
 			)
 		);
-
-		self::assertIsInt( $post_id );
 
 		return $post_id;
 	}

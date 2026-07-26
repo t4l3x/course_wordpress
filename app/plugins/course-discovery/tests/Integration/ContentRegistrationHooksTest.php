@@ -24,6 +24,35 @@ use WP_UnitTestCase;
  */
 final class ContentRegistrationHooksTest extends WP_UnitTestCase {
 	/**
+	 * Content types use the intended native visibility and REST exposure.
+	 */
+	public function test_post_types_use_intended_public_and_rest_visibility(): void {
+		$course = get_post_type_object( CoursePostType::POST_TYPE );
+
+		self::assertInstanceOf( WP_Post_Type::class, $course );
+		self::assertFalse( $course->public );
+		self::assertFalse( $course->publicly_queryable );
+		self::assertTrue( $course->show_ui );
+		self::assertTrue( $course->show_in_menu );
+		self::assertTrue( $course->show_in_rest );
+		self::assertFalse( $course->has_archive );
+		self::assertFalse( $course->rewrite );
+
+		foreach ( array( ProviderPostType::POST_TYPE, InstructorPostType::POST_TYPE ) as $post_type ) {
+			$reference = get_post_type_object( $post_type );
+
+			self::assertInstanceOf( WP_Post_Type::class, $reference );
+			self::assertFalse( $reference->public );
+			self::assertFalse( $reference->publicly_queryable );
+			self::assertTrue( $reference->show_ui );
+			self::assertTrue( $reference->show_in_menu );
+			self::assertFalse( $reference->show_in_rest );
+			self::assertFalse( $reference->has_archive );
+			self::assertFalse( $reference->rewrite );
+		}
+	}
+
+	/**
 	 * Registration argument filters can modify their WordPress object.
 	 *
 	 * @dataProvider registration_provider
@@ -60,6 +89,62 @@ final class ContentRegistrationHooksTest extends WP_UnitTestCase {
 			$this->unregister_object( $object_kind, $identifier );
 			$this->restore_registration( $registration_class );
 		}
+	}
+
+	/**
+	 * Invalid post-type filter output reports misuse and preserves registration.
+	 *
+	 * @dataProvider post_type_registration_provider
+	 *
+	 * @param class-string $registration_class Registration class.
+	 * @param string       $identifier         Post type identifier.
+	 * @param string       $filter             Registration arguments filter.
+	 */
+	public function test_invalid_post_type_filter_output_uses_default_arguments(
+		string $registration_class,
+		string $identifier,
+		string $filter
+	): void {
+		$callback = static fn (): string => 'invalid';
+
+		$this->unregister_object( 'post_type', $identifier );
+		add_filter( $filter, $callback );
+		$this->setExpectedIncorrectUsage( $registration_class . '::register' );
+
+		try {
+			$this->register_object( $registration_class );
+
+			self::assertTrue( post_type_exists( $identifier ) );
+		} finally {
+			remove_filter( $filter, $callback );
+			$this->unregister_object( 'post_type', $identifier );
+			$this->restore_registration( $registration_class );
+		}
+	}
+
+	/**
+	 * Post-type registration hooks and identifiers.
+	 *
+	 * @return array<string, array{class-string, string, string}>
+	 */
+	public static function post_type_registration_provider(): array {
+		return array(
+			'course'     => array(
+				CoursePostType::class,
+				CoursePostType::POST_TYPE,
+				CoursePostType::ARGS_FILTER,
+			),
+			'provider'   => array(
+				ProviderPostType::class,
+				ProviderPostType::POST_TYPE,
+				ProviderPostType::ARGS_FILTER,
+			),
+			'instructor' => array(
+				InstructorPostType::class,
+				InstructorPostType::POST_TYPE,
+				InstructorPostType::ARGS_FILTER,
+			),
+		);
 	}
 
 	/**

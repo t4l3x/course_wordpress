@@ -45,6 +45,13 @@ boundaries, and accidental WordPress dependencies in the domain. Put each
 regression test at the lowest layer that can reproduce the failure, adding a
 broader test only when the integration itself is significant.
 
+For Course administration, regression coverage must include meta-box
+registration scope, post-type checks, nonce and capability enforcement,
+autosave and revision guards, clearing optional metadata, wrong-post-type
+Provider and Instructor IDs, and validation of the complete submission before
+any destructive replacement. These paths belong in the real WordPress
+integration environment rather than mocked unit tests.
+
 Search filters are not part of the current content-model work. When multiple
 filter or storage implementations are introduced, they must reuse shared
 contract tests so identical criteria produce identical results across every

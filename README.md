@@ -66,6 +66,10 @@ Docker supplies WordPress. Composer belongs only to
 The generated plugin `vendor/` directory is not committed; `composer.lock` is
 committed so every environment uses the same tool versions.
 
+`php-stubs/wordpress-stubs` provides development-only WordPress declarations
+for IDEs and PHPStan. It is not loaded as the WordPress runtime; the real
+WordPress installation continues to come from Docker.
+
 The same commands can be run directly from the plugin directory:
 
 ```bash
@@ -126,6 +130,24 @@ Metadata keys and WordPress registration live in the infrastructure layer.
 Domain value objects remain independent of WordPress so persistence can evolve
 without changing domain-facing code. Search, filtering, pagination, caching, and
 dedicated search storage are intentionally deferred.
+
+## WordPress administration
+
+Administrators manage Courses, Providers, and Instructors through their native
+WordPress edit screens:
+
+- Courses use the title for the Course name, the excerpt for the short
+  description, the editor for the long description, and hierarchical Course
+  Categories. Separate panels manage price, Providers and Instructors, and
+  start months.
+- Providers use the title for their name, with one or more Locations assigned
+  through the native taxonomy control. Their edit screen is intentionally
+  minimal because a description is not part of the current content model.
+- Instructors use the title for their name. Their edit screen is intentionally
+  minimal because biographies are not part of the current content model.
+
+Course locations are always derived from the selected Providers and are never
+entered or stored directly on a Course.
 
 ## Documentation
 
