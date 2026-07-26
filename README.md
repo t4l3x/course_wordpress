@@ -111,10 +111,35 @@ composer install --no-dev --classmap-authoritative
 Run it inside the plugin and include the resulting production autoload files and
 dependencies. WordPress core must not be included.
 
+## Content model
+
+The plugin uses native WordPress content structures for its initial model:
+
+- `cd_course`, `cd_provider`, and `cd_instructor` custom post types
+- hierarchical `cd_course_category` terms assigned to courses
+- `cd_location` terms assigned to providers; course locations are derived from
+  related providers and are not duplicated on courses
+- one canonical decimal course price with no assumed currency, plus repeatable
+  provider relationships, instructor relationships, and `YYYY-MM` start dates
+
+Metadata keys and WordPress registration live in the infrastructure layer.
+Domain value objects remain independent of WordPress so persistence can evolve
+without changing domain-facing code. Search, filtering, pagination, caching, and
+dedicated search storage are intentionally deferred.
+
+## Documentation
+
+- [Architecture and storage decisions](docs/architecture.md)
+- [Coding conventions](docs/conventions.md)
+- [Testing strategy](docs/testing.md)
+- [Scalability path](docs/scalability.md)
+- [Instructions for coding agents](AGENTS.md)
+
 ## Project structure
 
 ```text
 .
+├── docs/
 ├── app/plugins/course-discovery/
 │   ├── assets/
 │   ├── src/
@@ -128,6 +153,7 @@ dependencies. WordPress core must not be included.
 │   └── course-discovery.php
 ├── docker/
 ├── scripts/
+├── AGENTS.md
 ├── compose.yaml
 ├── Makefile
 └── README.md

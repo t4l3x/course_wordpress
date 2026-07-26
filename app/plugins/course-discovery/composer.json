@@ -39,7 +39,7 @@
     "sort-packages": true
   },
   "scripts": {
-    "analyse": "phpstan analyse --configuration=phpstan.neon.dist --no-progress",
+    "analyse": "phpstan analyse --configuration=phpstan.neon.dist --no-progress --memory-limit=512M",
     "composer:audit": "@composer audit --locked",
     "composer:validate": [
       "@composer validate --strict",

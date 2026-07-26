@@ -40,3 +40,5 @@ if ( ! is_readable( COURSE_DISCOVERY_AUTOLOAD_FILE ) ) {
 }
 
 require_once COURSE_DISCOVERY_AUTOLOAD_FILE;
+
+( new OxfordInternational\CourseDiscovery\Plugin() )->register();
