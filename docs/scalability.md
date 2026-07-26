@@ -18,6 +18,13 @@ Measure slow queries, examined rows, cardinality, response time, and cache hit
 rates before selecting an optimization. Keep common filters selective and add
 purpose-built composite indexes only with evidence and a versioned migration.
 
+Repeatable course metadata is replaced with WordPress's native delete-then-add
+operations. Incoming values are validated and de-duplicated before deletion,
+but the sequence is not transactionally atomic: concurrent writers can
+interleave, and an add failure can leave a partial new set. Transactional
+relationship or lookup tables become worthwhile only when measured scale,
+write concurrency, or consistency requirements justify their migration cost.
+
 ## Practical evolution
 
 As volume and query complexity grow, the system can evolve in stages:

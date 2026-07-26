@@ -19,21 +19,34 @@ use PHPUnit\Framework\TestCase;
 final class PriceTest extends TestCase {
 	/**
 	 * Prices use a canonical decimal representation without using a float.
+	 *
+	 * @dataProvider canonical_price_provider
+	 *
+	 * @param string $input    Decimal input.
+	 * @param string $expected Canonical decimal.
 	 */
-	public function test_price_has_a_canonical_decimal_representation(): void {
-		$price = new Price( '00125.5000' );
+	public function test_price_has_a_canonical_decimal_representation( string $input, string $expected ): void {
+		$price = Price::from_decimal( $input );
 
-		self::assertSame( '125.5', $price->value() );
-		self::assertSame( '125.5', (string) $price );
+		self::assertSame( $expected, $price->decimal() );
 	}
 
 	/**
-	 * Zero is a valid numeric price.
+	 * Canonical decimal examples.
+	 *
+	 * @return array<string, array{string, string}>
 	 */
-	public function test_zero_is_a_valid_price(): void {
-		$price = new Price( '0' );
-
-		self::assertSame( '0', $price->value() );
+	public static function canonical_price_provider(): array {
+		return array(
+			'integer'             => array( '00125', '125' ),
+			'fraction'            => array( '00125.5000', '125.5' ),
+			'zero'                => array( '000.000', '0' ),
+			'small fraction'      => array( '000.0100', '0.01' ),
+			'arbitrary precision' => array(
+				'999999999999999999999999999999.12345678901234567890123456789',
+				'999999999999999999999999999999.12345678901234567890123456789',
+			),
+		);
 	}
 
 	/**
@@ -46,7 +59,7 @@ final class PriceTest extends TestCase {
 	public function test_invalid_prices_are_rejected( string $value ): void {
 		$this->expectException( InvalidArgumentException::class );
 
-		new Price( $value );
+		Price::from_decimal( $value );
 	}
 
 	/**
@@ -56,11 +69,17 @@ final class PriceTest extends TestCase {
 	 */
 	public static function invalid_price_provider(): array {
 		return array(
-			'empty'             => array( '' ),
-			'negative'          => array( '-1' ),
-			'non-numeric'       => array( 'free' ),
-			'currency included' => array( 'GBP 12.00' ),
-			'surrounding space' => array( ' 12.00 ' ),
+			'empty'                  => array( '' ),
+			'negative'               => array( '-1' ),
+			'negative zero'          => array( '-0' ),
+			'leading decimal point'  => array( '.5' ),
+			'trailing decimal point' => array( '1.' ),
+			'exponent'               => array( '1e2' ),
+			'leading plus'           => array( '+1' ),
+			'non-numeric'            => array( 'free' ),
+			'currency included'      => array( 'GBP 12.00' ),
+			'surrounding space'      => array( ' 12.00 ' ),
+			'trailing newline'       => array( "1\n" ),
 		);
 	}
 }

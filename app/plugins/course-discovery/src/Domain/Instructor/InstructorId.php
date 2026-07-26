@@ -12,13 +12,13 @@ namespace OxfordInternational\CourseDiscovery\Domain\Instructor;
 use InvalidArgumentException;
 
 /**
- * Identifies a persisted instructor without exposing WordPress post objects.
+ * Identifies an instructor.
  */
 final readonly class InstructorId {
 	/**
 	 * Create an instructor identifier.
 	 *
-	 * @param int $value Persisted identifier.
+	 * @param int $value Instructor identifier.
 	 *
 	 * @throws InvalidArgumentException When the identifier is not positive.
 	 */

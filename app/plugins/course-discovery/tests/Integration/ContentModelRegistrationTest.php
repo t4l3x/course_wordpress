@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OxfordInternational\CourseDiscovery\Tests\Integration;
 
+use InvalidArgumentException;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\CourseCategoryTaxonomy;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\CourseMeta;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\CoursePostType;
@@ -77,8 +78,9 @@ final class ContentModelRegistrationTest extends WP_UnitTestCase {
 		$course_id = self::factory()->post->create(
 			array( 'post_type' => CoursePostType::POST_TYPE )
 		);
-		$first     = wp_insert_term( 'Category One', CourseCategoryTaxonomy::TAXONOMY );
-		$second    = wp_insert_term( 'Category Two', CourseCategoryTaxonomy::TAXONOMY );
+		self::assertIsInt( $course_id );
+		$first  = wp_insert_term( 'Category One', CourseCategoryTaxonomy::TAXONOMY );
+		$second = wp_insert_term( 'Category Two', CourseCategoryTaxonomy::TAXONOMY );
 
 		self::assertIsArray( $first );
 		self::assertIsArray( $second );
@@ -161,5 +163,84 @@ final class ContentModelRegistrationTest extends WP_UnitTestCase {
 			self::assertIsArray( $rest_registration['schema'] );
 			self::assertSame( $expected_contract['type'], $rest_registration['schema']['type'] );
 		}
+	}
+
+	/**
+	 * The registered relationship boundary rejects unsupported identifiers.
+	 *
+	 * @dataProvider invalid_relationship_value_provider
+	 *
+	 * @param string $meta_key Registered relationship key.
+	 * @param mixed  $value    Invalid identifier value.
+	 */
+	public function test_relationship_metadata_rejects_invalid_values( string $meta_key, mixed $value ): void {
+		$course_id = self::factory()->post->create(
+			array( 'post_type' => CoursePostType::POST_TYPE )
+		);
+		self::assertIsInt( $course_id );
+
+		( new CourseMeta() )->register();
+		$this->expectException( InvalidArgumentException::class );
+
+		add_post_meta( $course_id, $meta_key, $value );
+	}
+
+	/**
+	 * Invalid external relationship identifier examples.
+	 *
+	 * @return array<string, array{string, mixed}>
+	 */
+	public static function invalid_relationship_value_provider(): array {
+		return array(
+			'zero provider'       => array( CourseMeta::PROVIDER_ID_KEY, 0 ),
+			'boolean provider'    => array( CourseMeta::PROVIDER_ID_KEY, true ),
+			'floating instructor' => array( CourseMeta::INSTRUCTOR_ID_KEY, 1.0 ),
+			'text instructor'     => array( CourseMeta::INSTRUCTOR_ID_KEY, 'not-an-id' ),
+		);
+	}
+
+	/**
+	 * Metadata authorization evaluates the user WordPress asks about.
+	 */
+	public function test_course_metadata_authorization_uses_the_evaluated_user(): void {
+		$course_id = self::factory()->post->create(
+			array( 'post_type' => CoursePostType::POST_TYPE )
+		);
+		self::assertIsInt( $course_id );
+		$administrator_id = $this->create_user( 'administrator' );
+		$subscriber_id    = $this->create_user( 'subscriber' );
+
+		( new CourseMeta() )->register();
+		wp_set_current_user( $subscriber_id );
+
+		try {
+			self::assertTrue(
+				user_can( $administrator_id, 'edit_post_meta', $course_id, CourseMeta::PRICE_KEY )
+			);
+			self::assertFalse(
+				user_can( $subscriber_id, 'edit_post_meta', $course_id, CourseMeta::PRICE_KEY )
+			);
+		} finally {
+			wp_set_current_user( 0 );
+		}
+	}
+
+	/**
+	 * Create a WordPress user fixture with a role.
+	 *
+	 * @param string $role WordPress role slug.
+	 */
+	private function create_user( string $role ): int {
+		$user_id = wp_insert_user(
+			array(
+				'user_login' => 'course-discovery-' . wp_generate_password( 12, false, false ),
+				'user_pass'  => wp_generate_password( 20 ),
+				'role'       => $role,
+			)
+		);
+
+		self::assertIsInt( $user_id );
+
+		return $user_id;
 	}
 }

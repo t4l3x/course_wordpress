@@ -30,14 +30,20 @@ make test
 Integration and feature suites must use the isolated test database configured
 by the project, never a development or production database.
 
+`tests/stubs/wp-phpunit.php` is scanned only by PHPStan. Runtime integration and
+feature suites load the installed WordPress PHPUnit functions and bootstrap, so
+their `WP_UnitTestCase`, factories, functions, hooks, and metadata behavior are
+the real WordPress implementations rather than test doubles.
+
 ## Risk and regression coverage
 
 High-risk areas include hook timing and customized registration arguments,
-taxonomy attachment, metadata type and cardinality, relationship integrity,
-date/price validation, authorization at write boundaries, and accidental
-WordPress dependencies in the domain. Put each regression test at the lowest
-layer that can reproduce the failure, adding a broader test only when the
-integration itself is significant.
+taxonomy attachment, metadata type and cardinality, corrupted persisted values,
+relationship identifier validation and replacement behavior, de-duplication and
+ordering, empty replacement, date/price validation, authorization at write
+boundaries, and accidental WordPress dependencies in the domain. Put each
+regression test at the lowest layer that can reproduce the failure, adding a
+broader test only when the integration itself is significant.
 
 Search filters are not part of the current content-model work. When multiple
 filter or storage implementations are introduced, they must reuse shared

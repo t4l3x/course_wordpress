@@ -12,11 +12,11 @@ use PHPUnit\Framework\TestCase;
 /**
  * Static-analysis shape of the WordPress integration test base class.
  */
-class WP_UnitTestCase extends TestCase {
+abstract class WP_UnitTestCase extends TestCase {
     /**
      * Return WordPress's test-data factory.
      */
-    public static function factory(): WP_UnitTest_Factory {
+    protected static function factory(): WP_UnitTest_Factory {
         throw new LogicException( 'Static-analysis stub only.' );
     }
 }

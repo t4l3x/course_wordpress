@@ -28,10 +28,33 @@ final class CourseMetadataStore {
 	 * @param CourseId $course_id Course identifier.
 	 * @param Price    $price     Course price.
 	 *
-	 * @throws InvalidArgumentException When metadata sanitization rejects the price.
+	 * @throws RuntimeException When WordPress cannot persist the price.
 	 */
 	public function save_price( CourseId $course_id, Price $price ): void {
-		update_post_meta( $course_id->value(), CourseMeta::PRICE_KEY, $price->value() );
+		$post_id = $course_id->value();
+		$decimal = $price->decimal();
+
+		$updated = update_post_meta(
+			$post_id,
+			CourseMeta::PRICE_KEY,
+			$decimal
+		);
+
+		if ( false !== $updated ) {
+			return;
+		}
+
+		$stored = get_post_meta(
+			$post_id,
+			CourseMeta::PRICE_KEY,
+			true
+		);
+
+		if ( $stored !== $decimal ) {
+			throw new RuntimeException(
+				'WordPress could not persist the course price.'
+			);
+		}
 	}
 
 	/**
@@ -39,7 +62,7 @@ final class CourseMetadataStore {
 	 *
 	 * @param CourseId $course_id Course identifier.
 	 *
-	 * @throws UnexpectedValueException When the stored value is not a string.
+	 * @throws UnexpectedValueException When the stored value is invalid.
 	 */
 	public function price( CourseId $course_id ): ?Price {
 		if ( ! metadata_exists( 'post', $course_id->value(), CourseMeta::PRICE_KEY ) ) {
@@ -49,13 +72,14 @@ final class CourseMetadataStore {
 		$value = get_post_meta( $course_id->value(), CourseMeta::PRICE_KEY, true );
 
 		if ( ! is_string( $value ) ) {
-			$value = '';
+			throw new UnexpectedValueException( 'Stored course price must be a string.' );
 		}
 
 		try {
-			return new Price( $value );
-		} catch ( InvalidArgumentException ) {
-			throw new UnexpectedValueException( 'Stored course price is invalid.' );
+			return Price::from_decimal( $value );
+		} catch ( InvalidArgumentException $exception ) {
+			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserved validation cause is not output.
+			throw new UnexpectedValueException( 'Stored course price is invalid.', 0, $exception );
 		}
 	}
 
@@ -86,7 +110,6 @@ final class CourseMetadataStore {
 	 * @return list<ProviderId>
 	 *
 	 * @throws UnexpectedValueException When a stored identifier is invalid.
-	 * @throws InvalidArgumentException When an identifier cannot become a value object.
 	 */
 	public function providers( CourseId $course_id ): array {
 		return array_map(
@@ -122,7 +145,6 @@ final class CourseMetadataStore {
 	 * @return list<InstructorId>
 	 *
 	 * @throws UnexpectedValueException When a stored identifier is invalid.
-	 * @throws InvalidArgumentException When an identifier cannot become a value object.
 	 */
 	public function instructors( CourseId $course_id ): array {
 		return array_map(
@@ -158,7 +180,7 @@ final class CourseMetadataStore {
 	 *
 	 * @return list<StartDate>
 	 *
-	 * @throws UnexpectedValueException When a stored date is not a string.
+	 * @throws UnexpectedValueException When a stored date is invalid.
 	 */
 	public function start_dates( CourseId $course_id ): array {
 		$values = get_post_meta( $course_id->value(), CourseMeta::START_DATE_KEY, false );
@@ -166,13 +188,14 @@ final class CourseMetadataStore {
 
 		foreach ( $values as $value ) {
 			if ( ! is_string( $value ) ) {
-				$value = '';
+				throw new UnexpectedValueException( 'Stored course start date must be a string.' );
 			}
 
 			try {
 				$dates[] = new StartDate( $value );
-			} catch ( InvalidArgumentException ) {
-				throw new UnexpectedValueException( 'Stored course start date is invalid.' );
+			} catch ( InvalidArgumentException $exception ) {
+				// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserved validation cause is not output.
+				throw new UnexpectedValueException( 'Stored course start date is invalid.', 0, $exception );
 			}
 		}
 
@@ -187,6 +210,10 @@ final class CourseMetadataStore {
 	/**
 	 * Replace all rows for one multi-value metadata contract.
 	 *
+	 * WordPress performs this as a non-transactional delete/add sequence. Values
+	 * are normalized before deletion, but concurrent writes can still race and
+	 * an add failure can leave a partial replacement.
+	 *
 	 * @param CourseId         $course_id Course identifier.
 	 * @param string           $meta_key  Registered metadata key.
 	 * @param list<int|string> $values    Scalar values.
@@ -196,8 +223,11 @@ final class CourseMetadataStore {
 	private function replace_multiple_values( CourseId $course_id, string $meta_key, array $values ): void {
 		$course_id_value = $course_id->value();
 		$unique_values   = array_values( array_unique( $values, SORT_REGULAR ) );
+		$deleted         = delete_post_meta( $course_id_value, $meta_key );
 
-		delete_post_meta( $course_id_value, $meta_key );
+		if ( false === $deleted && metadata_exists( 'post', $course_id_value, $meta_key ) ) {
+			throw new RuntimeException( 'WordPress could not replace course metadata.' );
+		}
 
 		foreach ( $unique_values as $value ) {
 			if ( false === add_post_meta( $course_id_value, $meta_key, $value, false ) ) {
@@ -221,12 +251,20 @@ final class CourseMetadataStore {
 		$identifiers = array();
 
 		foreach ( $values as $value ) {
-			if ( ! is_string( $value ) || 1 !== preg_match( '/\A[1-9][0-9]*\z/', $value ) ) {
+			if ( ! is_string( $value ) ) {
 				throw new UnexpectedValueException( 'Stored course relationship identifier is invalid.' );
 			}
 
-			$identifier = filter_var( $value, FILTER_VALIDATE_INT );
-			if ( false === $identifier || 1 > $identifier ) {
+			$identifier = filter_var(
+				$value,
+				FILTER_VALIDATE_INT,
+				array(
+					'options' => array(
+						'min_range' => 1,
+					),
+				)
+			);
+			if ( false === $identifier ) {
 				throw new UnexpectedValueException(
 					'Stored course relationship identifier is outside the supported range.'
 				);
