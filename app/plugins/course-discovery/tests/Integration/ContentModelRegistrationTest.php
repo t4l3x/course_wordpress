@@ -25,13 +25,13 @@ use WP_UnitTestCase;
  */
 final class ContentModelRegistrationTest extends WP_UnitTestCase {
 	/**
-	 * Course, Provider, and Instructor are registered for admin and REST use.
+	 * All content types are admin-manageable.
 	 */
 	public function test_all_content_post_types_are_registered(): void {
 		$post_types = array(
-			'cd_course',
-			'cd_provider',
-			'cd_instructor',
+			CoursePostType::POST_TYPE,
+			ProviderPostType::POST_TYPE,
+			InstructorPostType::POST_TYPE,
 		);
 
 		foreach ( $post_types as $post_type ) {
@@ -41,7 +41,51 @@ final class ContentModelRegistrationTest extends WP_UnitTestCase {
 
 			self::assertInstanceOf( WP_Post_Type::class, $registration );
 			self::assertTrue( $registration->show_ui );
-			self::assertTrue( $registration->show_in_rest );
+			self::assertTrue( $registration->show_in_menu );
+		}
+	}
+
+	/**
+	 * Content edit screens use domain language instead of generic post labels.
+	 */
+	public function test_content_post_types_use_domain_admin_labels(): void {
+		$expected_labels = array(
+			CoursePostType::POST_TYPE     => array(
+				'name'         => 'Courses',
+				'singular'     => 'Course',
+				'add_new'      => 'Add Course',
+				'add_new_item' => 'Add New Course',
+				'edit_item'    => 'Edit Course',
+				'all_items'    => 'All Courses',
+			),
+			ProviderPostType::POST_TYPE   => array(
+				'name'         => 'Providers',
+				'singular'     => 'Provider',
+				'add_new'      => 'Add Provider',
+				'add_new_item' => 'Add New Provider',
+				'edit_item'    => 'Edit Provider',
+				'all_items'    => 'All Providers',
+			),
+			InstructorPostType::POST_TYPE => array(
+				'name'         => 'Instructors',
+				'singular'     => 'Instructor',
+				'add_new'      => 'Add Instructor',
+				'add_new_item' => 'Add New Instructor',
+				'edit_item'    => 'Edit Instructor',
+				'all_items'    => 'All Instructors',
+			),
+		);
+
+		foreach ( $expected_labels as $post_type => $expected ) {
+			$registration = get_post_type_object( $post_type );
+
+			self::assertInstanceOf( WP_Post_Type::class, $registration );
+			self::assertSame( $expected['name'], $registration->labels->name );
+			self::assertSame( $expected['singular'], $registration->labels->singular_name );
+			self::assertSame( $expected['add_new'], $registration->labels->add_new );
+			self::assertSame( $expected['add_new_item'], $registration->labels->add_new_item );
+			self::assertSame( $expected['edit_item'], $registration->labels->edit_item );
+			self::assertSame( $expected['all_items'], $registration->labels->all_items );
 		}
 	}
 
@@ -53,6 +97,18 @@ final class ContentModelRegistrationTest extends WP_UnitTestCase {
 		self::assertTrue( post_type_supports( CoursePostType::POST_TYPE, 'editor' ) );
 		self::assertTrue( post_type_supports( CoursePostType::POST_TYPE, 'excerpt' ) );
 		self::assertTrue( post_type_supports( CoursePostType::POST_TYPE, 'custom-fields' ) );
+	}
+
+	/**
+	 * Provider and Instructor remain focused on their names.
+	 */
+	public function test_provider_and_instructor_are_name_only(): void {
+		self::assertTrue( post_type_supports( ProviderPostType::POST_TYPE, 'title' ) );
+		self::assertFalse( post_type_supports( ProviderPostType::POST_TYPE, 'editor' ) );
+		self::assertFalse( post_type_supports( ProviderPostType::POST_TYPE, 'excerpt' ) );
+		self::assertTrue( post_type_supports( InstructorPostType::POST_TYPE, 'title' ) );
+		self::assertFalse( post_type_supports( InstructorPostType::POST_TYPE, 'editor' ) );
+		self::assertFalse( post_type_supports( InstructorPostType::POST_TYPE, 'excerpt' ) );
 	}
 
 	/**
@@ -78,7 +134,7 @@ final class ContentModelRegistrationTest extends WP_UnitTestCase {
 		$course_id = self::factory()->post->create(
 			array( 'post_type' => CoursePostType::POST_TYPE )
 		);
-		self::assertIsInt( $course_id );
+
 		$first  = wp_insert_term( 'Category One', CourseCategoryTaxonomy::TAXONOMY );
 		$second = wp_insert_term( 'Category Two', CourseCategoryTaxonomy::TAXONOMY );
 
@@ -177,7 +233,6 @@ final class ContentModelRegistrationTest extends WP_UnitTestCase {
 		$course_id = self::factory()->post->create(
 			array( 'post_type' => CoursePostType::POST_TYPE )
 		);
-		self::assertIsInt( $course_id );
 
 		( new CourseMeta() )->register();
 		$this->expectException( InvalidArgumentException::class );
@@ -206,7 +261,7 @@ final class ContentModelRegistrationTest extends WP_UnitTestCase {
 		$course_id = self::factory()->post->create(
 			array( 'post_type' => CoursePostType::POST_TYPE )
 		);
-		self::assertIsInt( $course_id );
+
 		$administrator_id = $this->create_user( 'administrator' );
 		$subscriber_id    = $this->create_user( 'subscriber' );
 

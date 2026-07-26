@@ -11,6 +11,7 @@
     "dealerdirect/phpcodesniffer-composer-installer": "^1.2.1",
     "ergebnis/composer-normalize": "^2.52.0",
     "php-parallel-lint/php-parallel-lint": "^1.4.0",
+    "php-stubs/wordpress-stubs": "^6.9.4",
     "phpstan/phpstan": "^2.2.5",
     "phpstan/phpstan-phpunit": "^2.0.18",
     "phpstan/phpstan-strict-rules": "^2.0.12",
@@ -39,7 +40,7 @@
     "sort-packages": true
   },
   "scripts": {
-    "analyse": "phpstan analyse --configuration=phpstan.neon.dist --no-progress --memory-limit=512M",
+    "analyse": "phpstan analyse --configuration=phpstan.neon.dist --no-progress --memory-limit=768M",
     "composer:audit": "@composer audit --locked",
     "composer:validate": [
       "@composer validate --strict",

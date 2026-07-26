@@ -3,18 +3,21 @@
 ## Native WordPress content
 
 Courses, providers, and instructors are custom post types because each is an
-independently managed content entity with native editorial, administration, and
-REST behavior that WordPress already understands. Native
-fields hold the editorial content:
+independently managed content entity that WordPress administration already
+understands. Native fields hold the editorial content:
 
 | Content type | Native fields |
 | --- | --- |
 | Course | title, excerpt, content |
-| Provider | title, content |
-| Instructor | title, content |
+| Provider | title |
+| Instructor | title |
 
-The registrations support administration and the WordPress REST API. Public
-archive and pretty-permalink rules are deferred with the frontend experience.
+All three post types are admin-manageable but are not publicly queryable and do
+not expose native single pages, archives, or rewrite rules. Provider and
+Instructor are internal reference entities and are not exposed through the
+default REST API. Course remains available to REST for the block editor and its
+registered metadata; the Course Discovery feature, rather than native WordPress
+templates, owns future frontend exposure.
 
 Course categories are a hierarchical taxonomy on courses, allowing more than
 one category per course. Locations are a taxonomy on providers. A course may
@@ -63,6 +66,37 @@ Registration arguments can be changed through five deliberately narrow filters:
 - `course_discovery/instructor_post_type_args`
 - `course_discovery/course_category_taxonomy_args`
 - `course_discovery/location_taxonomy_args`
+
+Each filter must return the corresponding WordPress registration argument
+array. Invalid post-type filter output is reported as incorrect extension usage
+and the built-in arguments are used, so an extension cannot silently disable a
+core content type.
+
+## WordPress administration boundary
+
+The native post edit screens remain the administration interface. WordPress
+owns titles, Course excerpts and editor content, Course Categories, and
+Provider Locations. Provider and Instructor screens are intentionally
+name-focused. Separate Course meta boxes add only price, Provider and
+Instructor relationships, and start months. Course retains WordPress
+`custom-fields` support only so its registered metadata is present in the REST
+schema; the generic Custom Fields meta box is removed from its editor.
+
+Custom Course metadata follows one write path:
+
+```text
+WordPress Course edit form
+    -> post type, autosave/revision, nonce, capability, and input validation
+    -> Price, ProviderId, InstructorId, and StartDate values
+    -> CourseMetadataStore
+    -> WordPress post metadata
+```
+
+Relationship IDs are checked against their expected WordPress post type before
+they become domain identifiers. The complete submission is validated before
+metadata replacement begins, so invalid input does not partially update the
+Course. Locations do not pass through this flow: they remain terms on Providers
+and are derived for a Course through its Provider relationships.
 
 ## Boundaries and evolution
 

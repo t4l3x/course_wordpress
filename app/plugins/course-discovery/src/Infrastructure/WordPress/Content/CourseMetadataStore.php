@@ -58,6 +58,22 @@ final class CourseMetadataStore {
 	}
 
 	/**
+	 * Remove a course's price.
+	 *
+	 * @param CourseId $course_id Course identifier.
+	 *
+	 * @throws RuntimeException When WordPress cannot remove the price.
+	 */
+	public function remove_price( CourseId $course_id ): void {
+		$post_id = $course_id->value();
+		$deleted = delete_post_meta( $post_id, CourseMeta::PRICE_KEY );
+
+		if ( false === $deleted && metadata_exists( 'post', $post_id, CourseMeta::PRICE_KEY ) ) {
+			throw new RuntimeException( 'WordPress could not remove the course price.' );
+		}
+	}
+
+	/**
 	 * Read a course's price.
 	 *
 	 * @param CourseId $course_id Course identifier.

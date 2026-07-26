@@ -21,29 +21,53 @@ final class ProviderPostType {
 	 */
 	public function register(): void {
 		$args = array(
-			'labels'       => array(
-				'name'          => __( 'Providers', 'course-discovery' ),
-				'singular_name' => __( 'Provider', 'course-discovery' ),
-				'add_new_item'  => __( 'Add New Provider', 'course-discovery' ),
-				'edit_item'     => __( 'Edit Provider', 'course-discovery' ),
-				'new_item'      => __( 'New Provider', 'course-discovery' ),
-				'view_item'     => __( 'View Provider', 'course-discovery' ),
-				'search_items'  => __( 'Search Providers', 'course-discovery' ),
-				'not_found'     => __( 'No providers found.', 'course-discovery' ),
+			'labels'             => array(
+				'name'               => __( 'Providers', 'course-discovery' ),
+				'singular_name'      => __( 'Provider', 'course-discovery' ),
+				'add_new'            => __( 'Add Provider', 'course-discovery' ),
+				'add_new_item'       => __( 'Add New Provider', 'course-discovery' ),
+				'edit_item'          => __( 'Edit Provider', 'course-discovery' ),
+				'new_item'           => __( 'New Provider', 'course-discovery' ),
+				'all_items'          => __( 'All Providers', 'course-discovery' ),
+				'search_items'       => __( 'Search Providers', 'course-discovery' ),
+				'not_found'          => __( 'No providers found.', 'course-discovery' ),
+				'not_found_in_trash' => __( 'No providers found in Trash.', 'course-discovery' ),
 			),
-			'public'       => true,
-			'show_in_rest' => true,
-			'menu_icon'    => 'dashicons-building',
-			'rewrite'      => false,
-			'supports'     => array( 'title', 'editor' ),
+			'public'             => false,
+			'publicly_queryable' => false,
+			'show_ui'            => true,
+			'show_in_menu'       => true,
+			'show_in_rest'       => false,
+			'has_archive'        => false,
+			'rewrite'            => false,
+			'menu_icon'          => 'dashicons-building',
+			'supports'           => array( 'title' ),
 		);
 
-		// phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Slash separates the plugin namespace.
-		$args = apply_filters( 'course_discovery/provider_post_type_args', $args );
-		if ( ! is_array( $args ) ) {
-			return;
+		/**
+		 * Filters the Provider post type registration arguments.
+		 *
+		 * Extensions must return a WordPress post type registration argument array.
+		 *
+		 * @param array<string, mixed> $args Provider post type arguments.
+		 */
+		/**
+		 * Runtime extension output is untrusted.
+		 *
+		 * @var mixed $filtered_args
+		 */
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- The declared constant contains the plugin-prefixed hook name.
+		$filtered_args = apply_filters( self::ARGS_FILTER, $args );
+
+		if ( ! is_array( $filtered_args ) ) {
+			_doing_it_wrong(
+				__METHOD__,
+				esc_html__( 'Post type argument filters must return an array.', 'course-discovery' ),
+				esc_html( COURSE_DISCOVERY_VERSION )
+			);
+			$filtered_args = $args;
 		}
 
-		register_post_type( self::POST_TYPE, $args );
+		register_post_type( self::POST_TYPE, $filtered_args );
 	}
 }

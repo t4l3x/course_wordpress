@@ -13,6 +13,15 @@ use PHPUnit\Framework\TestCase;
  * Static-analysis shape of the WordPress integration test base class.
  */
 abstract class WP_UnitTestCase extends TestCase {
+	/**
+	 * Expect one WordPress incorrect-usage diagnostic.
+	 *
+	 * @param string $doing_it_wrong Class or function reporting incorrect usage.
+	 */
+	public function setExpectedIncorrectUsage( string $doing_it_wrong ): void {
+		throw new LogicException( 'Static-analysis stub only.' );
+	}
+
     /**
      * Return WordPress's test-data factory.
      */
