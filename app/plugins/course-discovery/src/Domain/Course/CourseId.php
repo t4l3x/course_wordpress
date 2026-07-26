@@ -12,13 +12,13 @@ namespace OxfordInternational\CourseDiscovery\Domain\Course;
 use InvalidArgumentException;
 
 /**
- * Identifies a persisted course without exposing WordPress post objects.
+ * Identifies a course.
  */
 final readonly class CourseId {
 	/**
 	 * Create a course identifier.
 	 *
-	 * @param int $value Persisted identifier.
+	 * @param int $value Course identifier.
 	 *
 	 * @throws InvalidArgumentException When the identifier is not positive.
 	 */

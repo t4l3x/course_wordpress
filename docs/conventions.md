@@ -16,6 +16,16 @@ primitives that have no domain rules.
 Prefer composition and explicit collaborators over inheritance, service
 locators, or global state.
 
+Prefer native PHP or WordPress validators when they express the complete
+invariant without lossy conversion. Keep explicit parsing when representation
+is itself part of the contract, such as an exact decimal string. Structurally
+similar domain types should remain separate when they prevent semantic mix-ups;
+do not add a common interface or base class without a polymorphic consumer.
+
+PHPDoc and exception contracts must describe behavior that can actually occur.
+When translating a lower-level validation exception at a persistence boundary,
+preserve it as the previous exception so diagnostic context is not lost.
+
 ## WordPress boundaries
 
 Domain code is WordPress-independent. WordPress post types, taxonomies,

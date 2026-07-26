@@ -22,6 +22,13 @@ relate to one or more providers, so its locations are derived from those
 providers. Copying locations into course metadata would introduce two sources
 of truth and make updates prone to drift.
 
+Domain identifiers use positive integers because WordPress post IDs are the
+current persisted identity. `CourseId`, `ProviderId`, and `InstructorId` remain
+separate types so callers cannot accidentally mix entities with different
+meaning. They do not share a base type because there is no polymorphic consumer,
+and they do not query WordPress for existence or post type; those checks belong
+at a boundary that has the necessary use-case context.
+
 ## Metadata and relationships
 
 WordPress posts, taxonomies, and metadata are the source of truth for this
@@ -43,10 +50,11 @@ than an opaque serialized array. `CourseMeta` centralizes the keys and explicit
 WordPress type, sanitization, authorization, and REST contracts.
 
 WordPress metadata access is isolated in `CourseMetadataStore`, including
-replacement of repeatable relationships and dates. Callers work with typed
-domain identifiers, `Price`, and `StartDate` values rather than `WP_Post`,
-`WP_Query`, globals, or raw metadata arrays. It is the supported metadata write
-boundary; registered REST schemas and sanitizers reject invalid external input.
+normalization, de-duplication, deterministic date ordering, and replacement of
+repeatable relationships and dates. Callers work with typed domain identifiers,
+`Price`, and `StartDate` values rather than `WP_Post`, `WP_Query`, globals, or
+raw metadata arrays. It is the supported metadata write boundary; registered
+REST schemas and sanitizers reject invalid external input.
 
 Registration arguments can be changed through five deliberately narrow filters:
 

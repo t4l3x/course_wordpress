@@ -16,7 +16,7 @@ use OxfordInternational\CourseDiscovery\Domain\Provider\ProviderId;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Verifies that identifiers cannot represent invalid WordPress object IDs.
+ * Verifies that identifiers retain their domain meaning and stay positive.
  */
 final class IdentifiersTest extends TestCase {
 	/**

@@ -20,40 +20,43 @@ final readonly class Price {
 	 *
 	 * @var string
 	 */
-	private string $value;
+	private string $decimal;
 
 	/**
-	 * Create a price from a decimal string.
+	 * Create a price from its exact decimal representation.
 	 *
 	 * Currency and display precision are intentionally outside this value object.
 	 *
-	 * @param string $value Decimal price.
+	 * @param string $decimal Decimal price.
 	 *
 	 * @throws InvalidArgumentException When the value is not a non-negative decimal.
 	 */
-	public function __construct( string $value ) {
-		if ( 1 !== preg_match( '/\A[0-9]+(?:\.[0-9]+)?\z/', $value ) ) {
+	public static function from_decimal( string $decimal ): self {
+		if ( 1 !== preg_match( '/\A[0-9]+(?:\.[0-9]+)?\z/', $decimal ) ) {
 			throw new InvalidArgumentException( 'A price must be a non-negative decimal string.' );
 		}
 
-		$parts       = explode( '.', $value, 2 );
-		$whole       = ltrim( $parts[0], '0' );
-		$whole       = '' === $whole ? '0' : $whole;
-		$fraction    = isset( $parts[1] ) ? rtrim( $parts[1], '0' ) : '';
-		$this->value = '' === $fraction ? $whole : $whole . '.' . $fraction;
+		$parts    = explode( '.', $decimal, 2 );
+		$whole    = ltrim( $parts[0], '0' );
+		$whole    = '' === $whole ? '0' : $whole;
+		$fraction = isset( $parts[1] ) ? rtrim( $parts[1], '0' ) : '';
+
+		return new self( '' === $fraction ? $whole : $whole . '.' . $fraction );
 	}
 
 	/**
 	 * Return the canonical decimal representation.
 	 */
-	public function value(): string {
-		return $this->value;
+	public function decimal(): string {
+		return $this->decimal;
 	}
 
 	/**
-	 * Return the canonical decimal representation.
+	 * Store an already validated canonical decimal representation.
+	 *
+	 * @param string $decimal Canonical decimal price.
 	 */
-	public function __toString(): string {
-		return $this->value;
+	private function __construct( string $decimal ) {
+		$this->decimal = $decimal;
 	}
 }

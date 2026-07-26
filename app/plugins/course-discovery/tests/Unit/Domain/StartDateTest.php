@@ -31,9 +31,12 @@ final class StartDateTest extends TestCase {
 	 * Canonical dates compare in chronological order.
 	 */
 	public function test_start_dates_compare_chronologically(): void {
+		$february  = new StartDate( '2026-02' );
 		$september = new StartDate( '2026-09' );
+		$october   = new StartDate( '2026-10' );
 		$january   = new StartDate( '2027-01' );
 
+		self::assertLessThan( 0, $february->compare_to( $october ) );
 		self::assertLessThan( 0, $september->compare_to( $january ) );
 		self::assertGreaterThan( 0, $january->compare_to( $september ) );
 		self::assertSame( 0, $september->compare_to( new StartDate( '2026-09' ) ) );

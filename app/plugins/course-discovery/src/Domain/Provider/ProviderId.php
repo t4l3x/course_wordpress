@@ -12,13 +12,13 @@ namespace OxfordInternational\CourseDiscovery\Domain\Provider;
 use InvalidArgumentException;
 
 /**
- * Identifies a persisted provider without exposing WordPress post objects.
+ * Identifies a provider.
  */
 final readonly class ProviderId {
 	/**
 	 * Create a provider identifier.
 	 *
-	 * @param int $value Persisted identifier.
+	 * @param int $value Provider identifier.
 	 *
 	 * @throws InvalidArgumentException When the identifier is not positive.
 	 */

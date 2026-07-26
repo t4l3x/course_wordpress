@@ -125,7 +125,7 @@ final class CourseMeta {
 			throw new InvalidArgumentException( 'A price must be provided as a decimal string.' );
 		}
 
-		return new Price( $value )->value();
+		return Price::from_decimal( $value )->decimal();
 	}
 
 	/**
@@ -168,14 +168,15 @@ final class CourseMeta {
 	/**
 	 * Determine whether the current user may edit a course's metadata.
 	 *
-	 * @param bool|null $allowed  Core's default authorization decision.
-	 * @param string    $meta_key Metadata key.
-	 * @param int       $post_id  Course post identifier.
+	 * @param bool   $allowed  Core's default authorization decision.
+	 * @param string $meta_key Metadata key.
+	 * @param int    $post_id  Course post identifier.
+	 * @param int    $user_id  Evaluated user identifier.
 	 */
-	public static function can_edit_course( ?bool $allowed, string $meta_key, int $post_id ): bool {
+	public static function can_edit_course( bool $allowed, string $meta_key, int $post_id, int $user_id ): bool {
 		unset( $allowed, $meta_key );
 
-		return current_user_can( 'edit_post', $post_id );
+		return user_can( $user_id, 'edit_post', $post_id );
 	}
 
 	/**
@@ -186,16 +187,20 @@ final class CourseMeta {
 	 * @throws InvalidArgumentException When the value is not a supported positive integer.
 	 */
 	private static function positive_integer( mixed $value ): int {
-		if ( is_int( $value ) && 0 < $value ) {
-			return $value;
-		}
-
-		if ( ! is_string( $value ) || 1 !== preg_match( '/\A[1-9][0-9]*\z/', $value ) ) {
+		if ( ! is_int( $value ) && ! is_string( $value ) ) {
 			throw new InvalidArgumentException( 'A relationship identifier must be a positive integer.' );
 		}
 
-		$identifier = filter_var( $value, FILTER_VALIDATE_INT );
-		if ( false === $identifier || 1 > $identifier ) {
+		$identifier = filter_var(
+			$value,
+			FILTER_VALIDATE_INT,
+			array(
+				'options' => array(
+					'min_range' => 1,
+				),
+			)
+		);
+		if ( false === $identifier ) {
 			throw new InvalidArgumentException( 'A relationship identifier is outside the supported integer range.' );
 		}
 
