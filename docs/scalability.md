@@ -2,8 +2,9 @@
 
 The current native WordPress model is intentionally optimized for clarity and
 editorial integration, not yet for a catalogue of hundreds of thousands or
-millions of courses. Search, caching, custom indexes, and external search are
-not implemented in this version.
+millions of courses. Typed filters model search intent, but query execution,
+caching, custom indexes, and external search are not implemented in this
+version.
 
 ## Expected pressure points
 

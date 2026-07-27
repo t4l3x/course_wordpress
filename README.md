@@ -128,8 +128,9 @@ The plugin uses native WordPress content structures for its initial model:
 
 Metadata keys and WordPress registration live in the infrastructure layer.
 Domain value objects remain independent of WordPress so persistence can evolve
-without changing domain-facing code. Search, filtering, pagination, caching, and
-dedicated search storage are intentionally deferred.
+without changing domain-facing code. Typed search criteria and filter
+composition are backend-independent; request parsing, query execution,
+pagination, caching, and dedicated search storage are intentionally deferred.
 
 ## WordPress administration
 
