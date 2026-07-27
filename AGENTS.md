@@ -15,6 +15,15 @@ These instructions apply to the whole repository.
   over inheritance and speculative framework layers.
 - Preserve existing behavior and keep changes scoped to the requested feature.
 
+## Course search
+
+- Read `docs/architecture.md`, `docs/conventions.md`, and `docs/testing.md`
+  before changing search or filter code.
+- Preserve OR within one filter and AND across filters as fixed semantics, and
+  keep backend query translation outside Domain and Application.
+- Use typed custom criteria for third-party filters; do not weaken
+  `SearchCriteria` into generic mixed key/value storage.
+
 ## PHP conventions
 
 - Use the PSR-4 namespace prefix

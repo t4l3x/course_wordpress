@@ -4,9 +4,10 @@ Run focused suites while developing and `make quality` before finishing.
 
 ## Test layers
 
-- **Unit tests** cover WordPress-independent domain behavior without loading
-  WordPress: identifier validation, price validation, strict `YYYY-MM` start
-  dates, canonical representation, and chronological comparison.
+- **Unit tests** cover WordPress-independent domain and application behavior
+  without loading WordPress: identifier validation, price validation, strict
+  `YYYY-MM` start dates, search criteria normalization, filter semantics,
+  registry behavior, and query composition.
 - **Integration tests** boot the real WordPress test framework. They verify post
   type supports, taxonomy registration and attachment, metadata schemas,
   repeatable metadata representation, and registration hook customization. Do
@@ -52,9 +53,28 @@ Provider and Instructor IDs, and validation of the complete submission before
 any destructive replacement. These paths belong in the real WordPress
 integration environment rather than mocked unit tests.
 
-Search filters are not part of the current content-model work. When multiple
-filter or storage implementations are introduced, they must reuse shared
-contract tests so identical criteria produce identical results across every
-implementation. Add targeted integration tests for WordPress query translation
-and feature tests for combined user-visible filtering, but do not build those
-tests before the feature exists.
+Filter composition is a high-risk regression area because one operator change
+can silently broaden or narrow every result. Every new Course filter must test:
+
+- empty selection adds no condition;
+- one selected value produces one condition;
+- multiple values remain alternatives inside that condition using OR;
+- composition with another filter creates separate top-level AND conditions;
+- invalid values are rejected at the typed boundary where relevant;
+- registration through `course_discovery/register_filters` works without
+  modifying existing filters;
+- third-party typed criteria flow through their filter into a custom condition
+  without changing built-in `SearchCriteria` fields or filters;
+- custom conditions remain present in the composed query;
+- query extension hooks can add, remove, or replace conditions without mutating
+  the original query;
+- the execution backend has translator coverage for the condition once a
+  backend exists.
+
+Tests for the filter contract remain isolated from WordPress. Integration tests
+boot real WordPress to verify hook registration and typed hook transformations.
+Add adapter-specific tests only when `WP_Query` or another execution backend is
+implemented. Filter composition and backend condition translation are both
+high-risk regression areas. Custom-criteria tests must also cover empty
+semantics, duplicate keys, and immutable replacement. Add feature tests when
+request parsing or a user-visible search workflow exists.

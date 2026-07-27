@@ -98,14 +98,115 @@ metadata replacement begins, so invalid input does not partially update the
 Course. Locations do not pass through this flow: they remain terms on Providers
 and are derived for a Course through its Provider relationships.
 
+## Course search composition
+
+Search composition is separate from request parsing and query execution:
+
+```text
+request parsing (future)
+    -> SearchCriteria
+    -> course_discovery/search_criteria
+    -> CourseFilterRegistry
+    -> CourseFilterPipeline
+    -> CourseQuery
+    -> course_discovery/course_query
+    -> course_discovery/result_order
+    -> search adapter and execution (future)
+```
+
+`SearchCriteria`, `SearchTerm`, and `ResultOrder` live in `Application/Search`
+because they describe the search use case rather than durable business state.
+Built-in `SearchCriteria` inputs remain first-class typed properties: optional
+`SearchTerm`, Provider, Category, and Location identities, canonical domain
+`StartDate` values, and semantic `ResultOrder`. A future request parser must map
+blank text to no `SearchTerm`; empty selections already mean no constraint.
+Duplicate built-in selections are normalized before filters receive them.
+`CategoryId` and `LocationId` remain domain value objects because those
+identities exist independently of searching.
+
+Third-party input uses `SearchCriterionInterface`, not an
+`array<string, mixed>`. Immutable `SearchCriteria` copies can add, inspect,
+check, or explicitly replace typed custom criteria by stable key. Custom
+criteria participate in `is_empty()` but do not extend the built-in collection
+normalization union. A Difficulty, Delivery Mode, or Language filter can
+therefore add its own criterion, filter, and condition without adding a
+property to `SearchCriteria` or changing any existing filter or pipeline code.
+
+Each `CourseFilterInterface` implementation contributes at most one typed query
+condition and knows nothing about other filters. Values inside a condition use
+OR semantics, while separate conditions in `CourseQuery` use AND semantics. For
+example:
+
+```text
+(provider=1 OR provider=2)
+AND
+(location=10 OR location=20)
+AND
+(category=5)
+```
+
+The text condition represents matching Course name, short description, or long
+description. The Location condition records the requested business intent only;
+resolving Location to Provider and then Course belongs to a future execution
+adapter.
+
+AND across conditions and OR among a condition's selected values are fixed
+Course Discovery rules, not configurable query operators. `CourseQuery` is a
+domain-specific search specification, not a generic boolean tree, SQL AST, or
+`WP_Query` wrapper. It contains no `WP_Query`, `meta_query`, or `tax_query`
+concepts. A later adapter can therefore translate the same intent to
+`WP_Query`, indexed lookup tables, or an external search service without
+changing criteria or filter implementations.
+
+Custom filter registration is only complete when the selected backend can
+translate its condition. Each execution backend must therefore provide a
+translator for every condition it accepts, including third-party conditions:
+
+```text
+CustomCriterion
+    -> CustomFilter
+    -> CustomCondition
+    -> backend ConditionTranslator
+    -> WP_Query or another search implementation
+```
+
+The upcoming `feat/wordpress-course-search` adapter must expose a condition
+translator registration point. That translator framework is deliberately not
+implemented until a real execution backend needs it.
+
+WordPress integration is isolated in `WordPressCourseSearchExtensions`, which
+publishes these typed extension contracts:
+
+- `course_discovery/register_filters` receives a `CourseFilterRegistry` action
+  argument; extensions register unique `CourseFilterInterface` implementations.
+- `course_discovery/search_criteria` must return `SearchCriteria`.
+  Extensions may use this hook to add or replace their typed custom criteria.
+- `course_discovery/course_query` must return `CourseQuery` and receives the
+  transformed criteria as context. Its immutable API supports adding,
+  inspecting, removing, and replacing conditions.
+- `course_discovery/result_order` must return `ResultOrder`; ordering keys are
+  application semantics, not raw WordPress `orderby` values.
+- `course_discovery/filter_options/{filter_key}` is the reserved public naming
+  convention for future option-provider hooks. No `list<mixed>` contract is
+  published yet; a concrete, typed option contract will be introduced only when
+  option providers are implemented, including the information hierarchical
+  Categories require.
+
+Core filters are connected to the registration action in `Plugin`, and the
+pipeline operates only on their shared contract. Invalid duplicate keys are
+rejected instead of silently replacing existing behavior. The same application
+search intent can later be translated by `WP_Query`, custom lookup tables, or an
+external search service without weakening its typed criteria.
+
 ## Boundaries and evolution
 
 `Plugin` is the composition root. Registration and persistence implementations
-live under `Infrastructure/WordPress`; value objects and rules live under
-`Domain`. Dependencies point toward the domain:
+live under `Infrastructure/WordPress`; search orchestration lives under
+`Application`; durable value objects and rules live under `Domain`.
+Dependencies point inward:
 
 ```text
-WordPress hooks and storage -> infrastructure adapters -> domain values
+WordPress hooks and storage -> infrastructure adapters -> application -> domain
 ```
 
 This boundary allows relationship or date persistence to move to indexed lookup
