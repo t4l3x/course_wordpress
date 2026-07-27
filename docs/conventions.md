@@ -94,3 +94,26 @@ letter. `CourseQuery` must remain specific to Course Discovery search intent
 rather than becoming a generic query language or query AST. Stable public hooks
 are API contracts; add hooks only at intentional registration or transformation
 boundaries.
+
+## Public Course Discovery frontend
+
+Keep public request parsing under `Infrastructure/WordPress`. Unslash once at
+the web boundary, validate into `SearchTerm`, typed identifiers, `StartDate`,
+`ResultOrder`, and bounded pagination, then pass only typed intent into
+Application code. Domain and Application objects must never read `$_GET`.
+
+Frontend coordinators must use the existing `CourseFilterPipeline` and
+`CourseSearchInterface`; do not recreate AND/OR rules or build `WP_Query`
+directly. Templates receive prepared values and must not call search, metadata,
+taxonomy, or request APIs. Escape every value for its final HTML context,
+including post titles and extension-provided option labels.
+
+Filtering must remain a server-rendered GET workflow. JavaScript may
+progressively enhance native controls and responsive panel behavior, but it must
+not be required to search, select multiple values, clear filters, or paginate.
+Prefer semantic HTML and native keyboard behavior over custom ARIA widgets. Do
+not introduce a frontend framework for this feature.
+
+Reference screenshots are presentation guidance, not a data contract. Never add
+fields, images, logos, duration, degree level, comparison, application flows, or
+theme-owned navigation merely because they appear in a visual reference.

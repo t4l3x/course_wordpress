@@ -49,6 +49,7 @@ run_wp option update blogdescription "A maintainable and extensible course disco
 run_wp rewrite structure '/%postname%/'
 run_wp rewrite flush
 run_wp plugin activate course-discovery
+run_wp course-discovery setup
 
 active_theme="$(run_wp option get stylesheet)"
 if ! docker compose exec -T wordpress test -f "/var/www/html/wp-content/themes/$active_theme/style.css"; then

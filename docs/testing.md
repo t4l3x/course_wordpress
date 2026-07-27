@@ -13,8 +13,9 @@ Run focused suites while developing and `make quality` before finishing.
   repeatable metadata representation, registration hook customization, and real
   `WP_Query` search execution. Do not mock WordPress in this suite.
 - **Feature tests** cover complete plugin behavior across multiple WordPress
-  boundaries. Add them when a user-facing workflow, REST operation, or complete
-  application use case exists; do not duplicate narrower integration tests.
+  boundaries. The Course Discovery shortcode tests exercise public GET input
+  through the real filter/search pipeline, result preparation, template
+  rendering, and asset enqueueing without duplicating translator semantics.
 - **End-to-end tests** exercise the deployed HTTP/browser stack when a frontend
   or public API makes that cost worthwhile. They complement rather than replace
   unit, integration, and feature coverage.
@@ -81,5 +82,27 @@ text columns, ordering, pagination, empty queries, custom translator
 registration, preservation of core translators, and deterministic duplicate-key
 rejection. Filter composition and backend condition translation are both
 high-risk regression areas. Custom-criteria tests must also cover empty
-semantics, duplicate keys, and immutable replacement. Add feature tests when
-request parsing or a user-visible search workflow exists.
+semantics, duplicate keys, and immutable replacement.
+
+The public frontend adds boundary-focused integration coverage for typed GET
+parsing, positive ID validation, canonical start-date validation, pagination
+bounds, published Provider options, Location terms, distinct chronological
+start months, hierarchical Categories, and typed option extension hooks. Feature
+coverage verifies shortcode registration, selected-value persistence, modeled
+result fields, result counts, both empty states, escaping, asset enqueueing, and
+pagination URLs preserving every active filter. CSS implementation details and
+simple drawer event wiring are intentionally not asserted.
+
+The development catalogue seeder is exercised in the real WordPress integration
+suite. Its regression verifies two identical runs do not duplicate content,
+modeled metadata is written through `CourseMetadataStore`, Provider Locations
+and hierarchical Course Categories are assigned through native taxonomies, and
+reset removes the marked seed catalogue.
+
+Landing-page installer integration tests verify canonical full-width Group and
+Shortcode-block creation, repeatable page reuse, preservation of existing
+content during normal setup, publication of an existing draft, and explicit
+`--force`-equivalent normalization. Feature coverage also verifies the rendered
+shortcode root carries WordPress's full-alignment class. The activation hook and
+WP-CLI command share this installer so their persistence behavior is covered
+without faking WordPress.

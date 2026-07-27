@@ -100,10 +100,12 @@ and are derived for a Course through its Provider relationships.
 
 ## Course search composition
 
-Search composition remains separate from request parsing and backend execution:
+Search composition remains separate from request parsing, display preparation,
+and backend execution:
 
 ```text
-request parsing (future)
+validated public GET input
+    -> CourseSearchRequestParser
     -> SearchCriteria
     -> course_discovery/search_criteria
     -> core CourseFilterRegistry + extension filters
@@ -116,14 +118,19 @@ request parsing (future)
     -> core WordPressConditionTranslatorRegistry + extension translators
     -> WP_Query
     -> CourseSearchResult
+    -> CourseResultPresenter
+    -> prepared view data
+    -> plugin-owned shortcode template
 ```
 
 `SearchCriteria`, `SearchTerm`, and `ResultOrder` live in `Application/Search`
 because they describe the search use case rather than durable business state.
 Built-in `SearchCriteria` inputs remain first-class typed properties: optional
 `SearchTerm`, Provider, Category, and Location identities, canonical domain
-`StartDate` values, and semantic `ResultOrder`. A future request parser must map
-blank text to no `SearchTerm`; empty selections already mean no constraint.
+`StartDate` values, and semantic `ResultOrder`. `CourseSearchRequestParser` maps
+blank text to no `SearchTerm`, validates positive identifiers and pagination,
+and ignores malformed values without coercing them into a different meaning.
+Empty selections mean no constraint.
 Duplicate built-in selections are normalized before filters receive them.
 `CategoryId` and `LocationId` remain domain value objects because those
 identities exist independently of searching.
@@ -203,11 +210,10 @@ WordPress Infrastructure publishes these typed extension contracts:
   custom condition must register its WordPress translator here.
 - `course_discovery/wordpress_result_order_args` maps semantic `ResultOrder`
   keys to validated WordPress ordering arguments.
-- `course_discovery/filter_options/{filter_key}` is the reserved public naming
-  convention for future option-provider hooks. No `list<mixed>` contract is
-  published yet; a concrete, typed option contract will be introduced only when
-  option providers are implemented, including the information hierarchical
-  Categories require.
+- `course_discovery/filter_options/{filter_key}` receives and must return a list
+  of `CourseFilterOption` objects. Each option carries a canonical submitted
+  value, display label, and hierarchy depth. Invalid extension output is
+  reported and the built-in options are retained.
 
 `Plugin` composes core filters and core translators directly into their base
 registries. Public registration actions extend fresh copies of those registries;
@@ -232,3 +238,66 @@ tables later while callers keep the same domain-facing contract. A denormalized
 search projection can likewise be rebuilt from WordPress source data without
 moving WordPress concerns into the domain. Any future custom schema must use
 versioned, repeatable migrations.
+
+## Public frontend boundary
+
+`[course_discovery]` is a plugin-owned, theme-independent entry point.
+`CourseDiscoveryShortcode` coordinates the request parser, existing filter
+pipeline, search contract, finite option loader, result presenter, and template.
+It does not construct `WP_Query` directly or repeat filter semantics.
+
+`CourseDiscoveryPageInstaller` provides portable, idempotent setup. Plugin
+activation creates a published page with a native full-width Group containing a
+Shortcode block when needed, and records its ID in the
+`course_discovery_page_id` option. Existing page content is preserved unless the
+explicit WP-CLI `--force` option requests canonical replacement. The
+plugin-local `course-discovery setup` command makes the same behavior available
+after copying the plugin into another WordPress installation; the repository's
+`make setup` target is only a Docker convenience wrapper around activation and
+that portable command.
+
+The form uses GET so searches remain shareable, bookmarkable, refresh-safe, and
+functional without JavaScript. Native search, checkbox, disclosure, form, and
+pagination semantics provide the baseline experience. Minimal vanilla
+JavaScript only turns the always-available filter panel into a responsive drawer
+with Escape handling and focus return.
+
+The `.course-discovery` root carries WordPress's `alignfull` class and uses a
+full-viewport CSS breakout to escape common theme content-width constraints.
+The scoped fallback deliberately outranks block-theme constrained-layout rules,
+including their `auto !important` horizontal margins. This is intentionally
+presentation-only: the surrounding theme still owns its header, navigation,
+page title, and page template. A theme that clips all descendant overflow can
+still prevent full bleed and must opt into a wider template, but no
+theme-specific selector or template metadata is added.
+
+`CourseFilterOptions` loads published Providers, Location terms, distinct
+canonical Course start months, and hierarchical Course Categories. Start months
+are selected in one distinct metadata query, sorted by their canonical `YYYY-MM`
+value, and formatted for display. `CourseResultPresenter` bulk-loads result and
+relationship posts so the template receives prepared values and performs no
+search, metadata, taxonomy, or request access. Locations continue to be derived
+from published related Providers.
+
+The local Stitch export in
+`app/plugins/course-discovery/stitch_university_course_discovery_portal` informs
+spacing, the navy search hero, result cards, active chips, sticky desktop
+filters, mobile drawer, empty state, and pagination only. It does not add domain
+fields or features: images, logos, ratings, duration, degree level, comparison,
+application workflow, favourites, and native Course detail pages remain outside
+the model. The export's Tailwind runtime, remote fonts, Material Symbols, and
+sample JavaScript are not plugin dependencies.
+
+## Development catalogue seed
+
+The `course-discovery seed` WP-CLI command is registered only for WP-CLI and
+refuses to mutate data unless `wp_get_environment_type()` is `local` or
+`development`. The generator creates native posts and taxonomy terms, then uses
+`CourseMetadataStore` for price, Provider, Instructor, and start-month writes.
+Locations remain attached to Providers and Course Categories remain native term
+relationships.
+
+Seed posts and terms carry a private development ownership marker so repeated
+runs upsert deterministic slugs and `--reset` deletes only demo-owned data. The
+marker is not a public content field, REST contract, search criterion, or domain
+concept, and the seeder adds no schema or migration.

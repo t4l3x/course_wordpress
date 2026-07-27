@@ -13,6 +13,7 @@ parameters:
         - tests
     scanFiles:
         - tests/stubs/wp-phpunit.php
+        - tests/stubs/wp-cli.php
     tmpDir: .cache/phpstan
     excludePaths:
         analyse:

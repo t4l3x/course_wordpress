@@ -41,6 +41,14 @@ server-backed autocomplete instead; that UI change can continue passing the
 same selected IDs to `CourseMetadataStore` without changing the persistence
 representation.
 
+The public filter form likewise loads finite Provider and taxonomy option lists,
+while start months use one distinct metadata query. Result presentation
+bulk-loads Course and related posts so normal WordPress object and term caches
+can serve per-result access. If option lists or repeated requests become a
+measured bottleneck, cache the typed option lists with explicit invalidation or
+replace only the affected control with a server-backed option source; do not
+move filtering into the browser or bypass the search boundary.
+
 ## Practical evolution
 
 As volume and query complexity grow, the system can evolve in stages:

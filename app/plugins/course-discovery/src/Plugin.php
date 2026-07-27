@@ -28,6 +28,14 @@ use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\CourseP
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\InstructorPostType;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\LocationTaxonomy;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\ProviderPostType;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Development\CatalogueSeedCommand;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Development\CatalogueSeeder;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Setup\CourseDiscoveryPageInstaller;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Setup\CourseDiscoverySetupCommand;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CourseDiscoveryShortcode;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CourseFilterOptions;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CourseResultPresenter;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CourseSearchRequestParser;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\Translator\CategoryConditionTranslator;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\Translator\LocationConditionTranslator;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\Translator\ProviderConditionTranslator;
@@ -56,6 +64,16 @@ final class Plugin {
 		$meta_box       = new CourseMetaBox( $metadata_store );
 		$save_handler   = new CourseMetaSaveHandler( $metadata_store );
 		$placeholders   = new EditorPlaceholders();
+		$shortcode      = new CourseDiscoveryShortcode(
+			new CourseSearchRequestParser(),
+			$this->course_filter_pipeline(),
+			$this->course_search(),
+			new CourseFilterOptions(),
+			new CourseResultPresenter( $metadata_store ),
+			dirname( __DIR__ ) . '/course-discovery.php',
+			dirname( __DIR__ ) . '/templates/course-discovery.php',
+			COURSE_DISCOVERY_VERSION
+		);
 		$admin_assets   = new AdminAssets(
 			dirname( __DIR__ ) . '/course-discovery.php',
 			COURSE_DISCOVERY_VERSION
@@ -75,6 +93,12 @@ final class Plugin {
 		add_action( 'admin_enqueue_scripts', array( $admin_assets, 'enqueue' ) );
 		add_filter( 'enter_title_here', array( $placeholders, 'title' ), 10, 2 );
 		add_filter( 'write_your_story', array( $placeholders, 'content' ), 10, 2 );
+		$shortcode->register();
+
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			( new CatalogueSeedCommand( new CatalogueSeeder( $metadata_store ) ) )->register();
+			( new CourseDiscoverySetupCommand( new CourseDiscoveryPageInstaller() ) )->register();
+		}
 	}
 
 	/**
