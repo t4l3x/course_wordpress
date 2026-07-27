@@ -9,11 +9,13 @@ declare(strict_types=1);
 
 namespace OxfordInternational\CourseDiscovery\Tests\Integration;
 
+use LogicException;
+use OxfordInternational\CourseDiscovery\Plugin;
 use OxfordInternational\CourseDiscovery\Application\Search\Condition\ProviderCondition;
-use OxfordInternational\CourseDiscovery\Application\Search\CourseFilterPipeline;
 use OxfordInternational\CourseDiscovery\Application\Search\CourseFilterRegistry;
 use OxfordInternational\CourseDiscovery\Application\Search\CourseQuery;
 use OxfordInternational\CourseDiscovery\Application\Search\CourseQueryConditionInterface;
+use OxfordInternational\CourseDiscovery\Application\Search\Filter\ProviderFilter;
 use OxfordInternational\CourseDiscovery\Application\Search\ResultOrder;
 use OxfordInternational\CourseDiscovery\Application\Search\SearchCriteria;
 use OxfordInternational\CourseDiscovery\Domain\Provider\ProviderId;
@@ -32,8 +34,7 @@ final class CourseSearchHooksTest extends WP_UnitTestCase {
 	 * Third parties can extend every typed pipeline stage through WordPress hooks.
 	 */
 	public function test_wordpress_hooks_extend_the_typed_filter_pipeline(): void {
-		$extensions    = new WordPressCourseSearchExtensions();
-		$pipeline      = new CourseFilterPipeline( new CourseFilterRegistry(), $extensions );
+		$pipeline      = ( new Plugin() )->course_filter_pipeline();
 		$custom_filter = new DifficultyFilter();
 		$criteria      = new SearchCriteria();
 
@@ -105,6 +106,26 @@ final class CourseSearchHooksTest extends WP_UnitTestCase {
 				$second_query->conditions()
 			)
 		);
+	}
+
+	/**
+	 * Extension filters cannot replace a core filter with the same key.
+	 */
+	public function test_extension_filter_cannot_replace_core_filter(): void {
+		$pipeline = ( new Plugin() )->course_filter_pipeline();
+		$callback = static function ( CourseFilterRegistry $registry ): void {
+			$registry->register( new ProviderFilter() );
+		};
+
+		add_action( WordPressCourseSearchExtensions::REGISTER_FILTERS_ACTION, $callback );
+
+		try {
+			$this->expectException( LogicException::class );
+
+			$pipeline->compose( new SearchCriteria() );
+		} finally {
+			remove_action( WordPressCourseSearchExtensions::REGISTER_FILTERS_ACTION, $callback );
+		}
 	}
 
 	/**

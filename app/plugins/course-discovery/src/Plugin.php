@@ -9,7 +9,9 @@ declare(strict_types=1);
 
 namespace OxfordInternational\CourseDiscovery;
 
+use OxfordInternational\CourseDiscovery\Application\Search\CourseFilterPipeline;
 use OxfordInternational\CourseDiscovery\Application\Search\CourseFilterRegistry;
+use OxfordInternational\CourseDiscovery\Application\Search\CourseSearchInterface;
 use OxfordInternational\CourseDiscovery\Application\Search\Filter\CategoryFilter;
 use OxfordInternational\CourseDiscovery\Application\Search\Filter\LocationFilter;
 use OxfordInternational\CourseDiscovery\Application\Search\Filter\ProviderFilter;
@@ -26,6 +28,13 @@ use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\CourseP
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\InstructorPostType;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\LocationTaxonomy;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\ProviderPostType;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\Translator\CategoryConditionTranslator;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\Translator\LocationConditionTranslator;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\Translator\ProviderConditionTranslator;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\Translator\StartDateConditionTranslator;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\Translator\TextConditionTranslator;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\WordPressConditionTranslatorRegistry;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\WordPressCourseSearch;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\WordPressCourseSearchExtensions;
 
 /**
@@ -36,10 +45,6 @@ final class Plugin {
 	 * Register plugin hooks.
 	 */
 	public function register(): void {
-		add_action(
-			WordPressCourseSearchExtensions::REGISTER_FILTERS_ACTION,
-			array( $this, 'register_course_filters' )
-		);
 		add_action( 'init', array( new CoursePostType(), 'register' ) );
 		add_action( 'init', array( new ProviderPostType(), 'register' ) );
 		add_action( 'init', array( new InstructorPostType(), 'register' ) );
@@ -73,15 +78,33 @@ final class Plugin {
 	}
 
 	/**
-	 * Register the core Course filters through the public filter registry action.
-	 *
-	 * @param CourseFilterRegistry $registry Registry for the current composition run.
+	 * Compose the Course filter pipeline with core filters and extension hooks.
 	 */
-	public function register_course_filters( CourseFilterRegistry $registry ): void {
-		$registry->register( new TextFilter() );
-		$registry->register( new ProviderFilter() );
-		$registry->register( new LocationFilter() );
-		$registry->register( new StartDateFilter() );
-		$registry->register( new CategoryFilter() );
+	public function course_filter_pipeline(): CourseFilterPipeline {
+		return new CourseFilterPipeline(
+			new CourseFilterRegistry(
+				new TextFilter(),
+				new ProviderFilter(),
+				new LocationFilter(),
+				new StartDateFilter(),
+				new CategoryFilter()
+			),
+			new WordPressCourseSearchExtensions()
+		);
+	}
+
+	/**
+	 * Compose WordPress Course search with the core condition translators.
+	 */
+	public function course_search(): CourseSearchInterface {
+		return new WordPressCourseSearch(
+			new WordPressConditionTranslatorRegistry(
+				new TextConditionTranslator(),
+				new ProviderConditionTranslator(),
+				new LocationConditionTranslator(),
+				new StartDateConditionTranslator(),
+				new CategoryConditionTranslator()
+			)
+		);
 	}
 }

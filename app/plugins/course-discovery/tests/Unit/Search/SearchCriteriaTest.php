@@ -152,6 +152,26 @@ final class SearchCriteriaTest extends TestCase {
 	}
 
 	/**
+	 * Stable criterion and ordering keys may begin with a number.
+	 */
+	public function test_stable_extension_keys_may_begin_with_number(): void {
+		$criterion = new class() implements SearchCriterionInterface {
+			/**
+			 * Return a stable test key.
+			 */
+			public function key(): string {
+				return '1_custom';
+			}
+		};
+		$criteria  = ( new SearchCriteria() )
+			->with_custom_criterion( $criterion )
+			->with_result_order( new ResultOrder( '1_priority' ) );
+
+		self::assertSame( $criterion, $criteria->custom_criterion( '1_custom' ) );
+		self::assertSame( '1_priority', $criteria->result_order()->key() );
+	}
+
+	/**
 	 * Search terms containing no searchable text are rejected.
 	 *
 	 * @dataProvider invalid_search_term_provider

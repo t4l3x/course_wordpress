@@ -10,8 +10,8 @@ Run focused suites while developing and `make quality` before finishing.
   registry behavior, and query composition.
 - **Integration tests** boot the real WordPress test framework. They verify post
   type supports, taxonomy registration and attachment, metadata schemas,
-  repeatable metadata representation, and registration hook customization. Do
-  not mock WordPress in this suite.
+  repeatable metadata representation, registration hook customization, and real
+  `WP_Query` search execution. Do not mock WordPress in this suite.
 - **Feature tests** cover complete plugin behavior across multiple WordPress
   boundaries. Add them when a user-facing workflow, REST operation, or complete
   application use case exists; do not duplicate narrower integration tests.
@@ -62,7 +62,7 @@ can silently broaden or narrow every result. Every new Course filter must test:
 - composition with another filter creates separate top-level AND conditions;
 - invalid values are rejected at the typed boundary where relevant;
 - registration through `course_discovery/register_filters` works without
-  modifying existing filters;
+  modifying existing filters, while core filters remain present;
 - third-party typed criteria flow through their filter into a custom condition
   without changing built-in `SearchCriteria` fields or filters;
 - custom conditions remain present in the composed query;
@@ -73,8 +73,13 @@ can silently broaden or narrow every result. Every new Course filter must test:
 
 Tests for the filter contract remain isolated from WordPress. Integration tests
 boot real WordPress to verify hook registration and typed hook transformations.
-Add adapter-specific tests only when `WP_Query` or another execution backend is
-implemented. Filter composition and backend condition translation are both
+WordPress translator tests must use real posts, repeatable metadata rows,
+taxonomy terms, and `WP_Query`; cover OR within Provider, Location, StartDate,
+and Category conditions, AND across conditions, parent Categories including
+descendants, derived Locations with and without matching Providers, all three
+text columns, ordering, pagination, empty queries, custom translator
+registration, preservation of core translators, and deterministic duplicate-key
+rejection. Filter composition and backend condition translation are both
 high-risk regression areas. Custom-criteria tests must also cover empty
 semantics, duplicate keys, and immutable replacement. Add feature tests when
 request parsing or a user-visible search workflow exists.

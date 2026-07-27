@@ -2,9 +2,9 @@
 
 The current native WordPress model is intentionally optimized for clarity and
 editorial integration, not yet for a catalogue of hundreds of thousands or
-millions of courses. Typed filters model search intent, but query execution,
-caching, custom indexes, and external search are not implemented in this
-version.
+millions of courses. Current execution uses standard paginated `WP_Query`
+through the `CourseSearchInterface` boundary. Caching, custom indexes, and
+external search are not implemented in this version.
 
 ## Expected pressure points
 
@@ -14,6 +14,14 @@ scan a large result set. The standard metadata indexes help locate keys and
 posts but are not tailored to every value/range query. Repeated relationship and
 date rows also increase join volume. Term and post hydration can cause further
 queries if callers do not prime or reuse WordPress caches.
+
+Location filtering currently performs a Provider taxonomy lookup before the
+Course metadata query. This keeps Location derivation correct and simple, but
+uses `posts_per_page => -1` to resolve every matching Provider and can produce a
+large Provider-ID `IN` list for the Course metadata query. Both become
+bottlenecks at high scale. Compound metadata and taxonomy filters also require
+multiple joins, and standard page-number pagination becomes progressively
+slower at large offsets.
 
 Measure slow queries, examined rows, cardinality, response time, and cache hit
 rates before selecting an optimization. Keep common filters selective and add
@@ -50,6 +58,24 @@ As volume and query complexity grow, the system can evolve in stages:
 
 WordPress remains the editorial source of truth; derived projections must have
 repeatable rebuild and synchronization processes.
+
+## Elasticsearch or OpenSearch path
+
+Introduce external search only after measurements show sustained unacceptable
+`WP_Query` latency, examined rows, large Location-to-Provider expansions, or a
+product requirement for relevance scoring and facets that WordPress cannot
+serve efficiently. It is unnecessary for the assessment-sized catalogue and
+would otherwise add synchronization and operational failure modes.
+
+The migration path is to implement another `CourseSearchInterface` adapter that
+translates the existing `CourseQuery` conditions into an external query DSL.
+Build a versioned projection containing Course text, Provider IDs, derived
+Location IDs, start months, Category ancestry, and stable ordering fields.
+Synchronize it from WordPress changes, provide a repeatable full rebuild, and
+switch indexes through an alias only after validation. Custom conditions still
+require a translator for that backend. Application criteria, filters,
+conditions, pagination result types, and callers do not need to depend on the
+external client.
 
 For future search results, prefer keyset/cursor pagination with a stable,
 deterministic order and unique tie-breaker. Large `OFFSET` values force the

@@ -387,15 +387,12 @@ final readonly class SearchCriteria {
 	/**
 	 * Validate one public extension criterion key.
 	 *
-	 * Application code cannot use WordPress sanitizers, and no native PHP
-	 * validator expresses this exact stable-key grammar.
-	 *
 	 * @param string $key Criterion key.
 	 *
 	 * @throws InvalidArgumentException When the criterion key is invalid.
 	 */
 	private static function validate_custom_criterion_key( string $key ): void {
-		if ( 1 !== preg_match( '/\A[a-z][a-z0-9_-]*\z/', $key ) ) {
+		if ( '' === $key || 1 !== preg_match( '/\A[a-z0-9_-]+\z/', $key ) ) {
 			throw new InvalidArgumentException( 'A custom search criterion key must be a stable lowercase identifier.' );
 		}
 	}
