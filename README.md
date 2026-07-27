@@ -1,39 +1,62 @@
+# Oxford Course Discovery
 
+A Docker-based WordPress course catalogue with a portable Course Discovery
+plugin. The plugin provides server-rendered search, filters, responsive result
+cards, pagination, automatic page setup, and deterministic demo data.
 
-A Docker-based WordPress course discovery application. The Course Discovery
-plugin is a self-contained Composer package that can be published independently.
+## Quick start for testers
 
-## Prerequisites
+Run these commands from the repository root. You need Docker with the Compose v2
+plugin and GNU Make; host PHP, Composer, a web server, and a database are not
+required.
 
-- Docker with the Compose v2 plugin
-- GNU Make
-
-No host PHP, Composer, web server, or database installation is required.
-
-## Installation
+### 1. Initialize WordPress
 
 ```bash
 make init
 ```
 
-This command creates `.env` when needed, installs the plugin's locked Composer
-dependencies, starts WordPress and its supporting services, and activates the
-Course Discovery plugin. It can be run again without deleting existing data.
+This creates the local environment when needed, installs the plugin's locked
+dependencies, starts WordPress, activates the plugin, and creates the public
+Course Discovery page. It is safe to run again without deleting existing data.
 
-## Local access
+### 2. Confirm the plugin page
 
-- Frontend: <http://localhost:8080>
-- Admin: <http://localhost:8080/wp-admin>
-- Username: `admin`
-- Password: `admin`
+```bash
+make setup
+```
 
-These credentials are local defaults only.
+This idempotent command activates the plugin if necessary and normalizes the
+managed page to the full-width Course Discovery layout. It is useful after
+pulling frontend changes or when testing against an existing local database.
 
-## Development commands
+### 3. Load demo catalogue data
+
+```bash
+make seed
+```
+
+This resets only plugin-owned demo records and creates 40 varied Courses with
+Providers, Instructors, Locations, hierarchical Categories, prices, and start
+dates. Repeating the command does not accumulate duplicates.
+
+### 4. Open the application
+
+- Course catalogue: <http://localhost:8080/course-discovery/>
+- WordPress Admin: <http://localhost:8080/wp-admin>
+- Admin username: `admin`
+- Admin password: `admin`
+
+The credentials above are development defaults only. After setup, the catalogue
+should show 40 Courses and enough filter options to exercise filtering and
+pagination. Use `make up` to start an already initialized environment later.
+
+## Common commands
 
 | Command | Description |
 | --- | --- |
 | `make help` | List available commands |
+| `make setup` | Activate the plugin and normalize the Course Discovery page |
 | `make up` | Build and start the application |
 | `make down` | Stop containers without deleting data |
 | `make restart` | Restart application containers |
@@ -41,6 +64,7 @@ These credentials are local defaults only.
 | `make logs` | Follow application logs |
 | `make shell` | Open a shell in the WordPress container |
 | `make wp ARGS="plugin list"` | Run WP-CLI |
+| `make seed` | Reset and generate a deterministic 40-Course demo catalogue |
 | `make composer ARGS="--version"` | Run Composer in the plugin directory |
 | `make composer-install` | Install locked plugin dependencies |
 | `make composer-update` | Update plugin dependencies and the lock file |
@@ -131,8 +155,10 @@ Domain value objects remain independent of WordPress so persistence can evolve
 without changing domain-facing code. Typed search criteria and filter
 composition are backend-independent. WordPress search execution uses a
 condition-translator registry and standard `WP_Query` pagination behind
-`CourseSearchInterface`; request parsing, public delivery, caching, and
-dedicated search storage remain deferred.
+`CourseSearchInterface`. The plugin-owned public shortcode parses validated GET
+input into those typed criteria and renders prepared results without exposing
+WordPress queries to templates. Persistent caching and dedicated search storage
+remain deferred.
 
 ## WordPress administration
 
@@ -152,10 +178,87 @@ WordPress edit screens:
 Course locations are always derived from the selected Providers and are never
 entered or stored directly on a Course.
 
+### Demo catalogue data
+
+Generate a realistic local catalogue with 40 Courses:
+
+```bash
+make seed
+```
+
+The Make target runs `wp course-discovery seed --reset`, deleting only content
+marked as belonging to the demo seed before recreating it. It creates varied
+Providers, Instructors, Locations, hierarchical Categories, prices,
+relationships, descriptions, and start months across 2027 and 2028. To exercise
+a different page count, generate between 30 and 50 Courses:
+
+```bash
+make seed ARGS="--count=50"
+```
+
+The underlying command can also update the same deterministic records without a
+reset:
+
+```bash
+make wp ARGS="course-discovery seed"
+```
+
+The command refuses to run unless WordPress reports a `local` or `development`
+environment. Its ownership marker is used only to make demo reset safe; modeled
+Course values still pass through the plugin's existing content structures and
+`CourseMetadataStore`.
+
+## Course Discovery page
+
+Plugin activation creates a published page containing a full-width Group block
+and the Shortcode block when one does not already exist. For an existing local
+installation, activate the plugin and normalize that page with one command:
+
+```bash
+make setup
+```
+
+The setup is idempotent. The Make wrapper runs `wp plugin activate
+course-discovery` followed by `wp course-discovery setup --force`; `--force`
+replaces a matching page's content with the canonical full-width Group and
+Shortcode blocks. Without `--force`, the plugin preserves existing page content
+and adds the shortcode only when it is missing.
+
+When the plugin folder is copied into another WordPress project, the portable
+WP-CLI equivalent is:
+
+```bash
+wp plugin activate course-discovery
+wp course-discovery setup
+```
+
+Alternatively, activate it in WordPress Admin; the activation hook creates the
+page automatically. The shortcode can still be placed manually on any page:
+
+```text
+[course_discovery]
+```
+
+The plugin renders the complete responsive search, filter, result-card, and
+pagination interface; no custom theme is required. Searches use validated GET
+parameters, so filtered result URLs can be shared or bookmarked and the form
+works without JavaScript. A small plugin script progressively enhances the
+native filter panel into a mobile drawer while the desktop filter panel remains
+sticky. Active filter chips are links that remove one canonical GET value at a
+time. The generated page and shortcode root use WordPress's native `alignfull`
+signal, with a stronger scoped full-viewport CSS fallback for themes that still
+force constrained content widths. Theme navigation and the page title remain
+theme-owned.
+
+The public cards display only modeled Course data. They do not add course detail
+pages, comparison, application actions, images, duration, degree level, or an
+assumed price currency.
+
 ## Documentation
 
 - [Architecture and storage decisions](docs/architecture.md)
 - [Coding conventions](docs/conventions.md)
+- [Frontend design mapping](docs/design.md)
 - [Testing strategy](docs/testing.md)
 - [Scalability path](docs/scalability.md)
 - [Instructions for coding agents](AGENTS.md)

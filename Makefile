@@ -6,13 +6,17 @@ ARGS ?=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help init up down restart status logs shell wp composer composer-install composer-update composer-validate composer-audit lint cs cs-fix analyse test test-unit test-integration test-feature quality test-database-up db-export db-import reset
+.PHONY: help init setup up down restart status logs shell wp seed composer composer-install composer-update composer-validate composer-audit lint cs cs-fix analyse test test-unit test-integration test-feature quality test-database-up db-export db-import reset
 
 help: ## Show available development commands.
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 init: ## Create local config, start services and install WordPress.
 	@./scripts/bootstrap.sh
+
+setup: ## Activate the plugin and normalize its public Course Discovery page.
+	@$(COMPOSE) run --rm --no-deps wp-cli plugin activate course-discovery
+	@$(COMPOSE) run --rm --no-deps wp-cli course-discovery setup --force
 
 up: ## Build and start the application.
 	@$(COMPOSE) up --detach --build database wordpress web
@@ -34,6 +38,9 @@ shell: ## Open a shell in the WordPress PHP container.
 
 wp: ## Run WP-CLI, for example: make wp ARGS="plugin list".
 	@$(COMPOSE) run --rm --no-deps wp-cli $(ARGS)
+
+seed: ## Reset and generate 40 deterministic demo Courses. Pass ARGS="--count=50" to change the count.
+	@$(COMPOSE) run --rm --no-deps wp-cli course-discovery seed --reset $(ARGS)
 
 composer: ## Run Composer, for example: make composer ARGS="--version".
 	@$(COMPOSE) run --rm --no-deps composer $(ARGS)

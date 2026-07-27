@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Oxford Course Discovery
  * Description:       Extensible course discovery domain and application functionality.
- * Version:           0.1.0
+ * Version:           0.2.1
  * Requires at least: 7.0
  * Requires PHP:      8.5
  * Author:            Taleh Aghazada
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const COURSE_DISCOVERY_VERSION       = '0.1.0';
+const COURSE_DISCOVERY_VERSION       = '0.2.1';
 const COURSE_DISCOVERY_AUTOLOAD_FILE = __DIR__ . '/vendor/autoload.php';
 
 if ( ! is_readable( COURSE_DISCOVERY_AUTOLOAD_FILE ) ) {
@@ -40,5 +40,13 @@ if ( ! is_readable( COURSE_DISCOVERY_AUTOLOAD_FILE ) ) {
 }
 
 require_once COURSE_DISCOVERY_AUTOLOAD_FILE;
+
+register_activation_hook(
+	__FILE__,
+	array(
+		new OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Setup\CourseDiscoveryPageInstaller(),
+		'install',
+	)
+);
 
 ( new OxfordInternational\CourseDiscovery\Plugin() )->register();
