@@ -100,18 +100,22 @@ and are derived for a Course through its Provider relationships.
 
 ## Course search composition
 
-Search composition is separate from request parsing and query execution:
+Search composition remains separate from request parsing and backend execution:
 
 ```text
 request parsing (future)
     -> SearchCriteria
     -> course_discovery/search_criteria
-    -> CourseFilterRegistry
+    -> core CourseFilterRegistry + extension filters
     -> CourseFilterPipeline
     -> CourseQuery
     -> course_discovery/course_query
     -> course_discovery/result_order
-    -> search adapter and execution (future)
+    -> CourseSearchInterface
+    -> WordPressCourseSearch
+    -> core WordPressConditionTranslatorRegistry + extension translators
+    -> WP_Query
+    -> CourseSearchResult
 ```
 
 `SearchCriteria`, `SearchTerm`, and `ResultOrder` live in `Application/Search`
@@ -145,18 +149,23 @@ AND
 (category=5)
 ```
 
-The text condition represents matching Course name, short description, or long
-description. The Location condition records the requested business intent only;
-resolving Location to Provider and then Course belongs to a future execution
-adapter.
+The WordPress text translator uses native `WP_Query` search with explicit
+`post_title`, `post_excerpt`, and `post_content` columns. The Location
+translator first finds Providers carrying any selected Location term and then
+matches Courses carrying any of those Provider relationship IDs. Locations
+remain derived and are never copied to Course metadata. Category translation
+uses `include_children => true`, so selecting a parent Category also includes
+Courses assigned to its descendant Categories.
 
 AND across conditions and OR among a condition's selected values are fixed
 Course Discovery rules, not configurable query operators. `CourseQuery` is a
 domain-specific search specification, not a generic boolean tree, SQL AST, or
 `WP_Query` wrapper. It contains no `WP_Query`, `meta_query`, or `tax_query`
-concepts. A later adapter can therefore translate the same intent to
-`WP_Query`, indexed lookup tables, or an external search service without
-changing criteria or filter implementations.
+concepts. `CourseSearchInterface` is the Application execution boundary;
+`WordPressCourseSearch` implements it with raw query arrays contained entirely
+in Infrastructure. Another adapter can therefore translate the same intent to
+indexed lookup tables or an external search service without changing criteria
+or filter implementations.
 
 Custom filter registration is only complete when the selected backend can
 translate its condition. Each execution backend must therefore provide a
@@ -170,15 +179,18 @@ CustomCriterion
     -> WP_Query or another search implementation
 ```
 
-The upcoming `feat/wordpress-course-search` adapter must expose a condition
-translator registration point. That translator framework is deliberately not
-implemented until a real execution backend needs it.
+The WordPress adapter uses one small Strategy registry keyed by condition key.
+Each translator returns WordPress metadata clauses, taxonomy clauses, or
+additional constraints for exactly one condition. The executor sets a
+top-level `relation => AND` for metadata and taxonomy groups; each built-in
+multi-value translator uses `IN`, preserving OR within that filter. Unknown
+conditions fail instead of being ignored.
 
-WordPress integration is isolated in `WordPressCourseSearchExtensions`, which
-publishes these typed extension contracts:
+WordPress Infrastructure publishes these typed extension contracts:
 
 - `course_discovery/register_filters` receives a `CourseFilterRegistry` action
-  argument; extensions register unique `CourseFilterInterface` implementations.
+  argument containing the core filters; extensions add unique
+  `CourseFilterInterface` implementations.
 - `course_discovery/search_criteria` must return `SearchCriteria`.
   Extensions may use this hook to add or replace their typed custom criteria.
 - `course_discovery/course_query` must return `CourseQuery` and receives the
@@ -186,17 +198,23 @@ publishes these typed extension contracts:
   inspecting, removing, and replacing conditions.
 - `course_discovery/result_order` must return `ResultOrder`; ordering keys are
   application semantics, not raw WordPress `orderby` values.
+- `course_discovery/register_wordpress_condition_translators` receives a fresh
+  copy of the core `WordPressConditionTranslatorRegistry` for each search. A
+  custom condition must register its WordPress translator here.
+- `course_discovery/wordpress_result_order_args` maps semantic `ResultOrder`
+  keys to validated WordPress ordering arguments.
 - `course_discovery/filter_options/{filter_key}` is the reserved public naming
   convention for future option-provider hooks. No `list<mixed>` contract is
   published yet; a concrete, typed option contract will be introduced only when
   option providers are implemented, including the information hierarchical
   Categories require.
 
-Core filters are connected to the registration action in `Plugin`, and the
-pipeline operates only on their shared contract. Invalid duplicate keys are
-rejected instead of silently replacing existing behavior. The same application
-search intent can later be translated by `WP_Query`, custom lookup tables, or an
-external search service without weakening its typed criteria.
+`Plugin` composes core filters and core translators directly into their base
+registries. Public registration actions extend fresh copies of those registries;
+core behavior therefore does not depend on extension hooks. Invalid duplicate
+keys are rejected instead of silently replacing core behavior. The same
+application search intent can later be translated by `WP_Query`, custom lookup
+tables, or an external search service without weakening its typed criteria.
 
 ## Boundaries and evolution
 

@@ -81,6 +81,20 @@ final class FilterRegistryPipelineTest extends TestCase {
 	}
 
 	/**
+	 * Stable filter and condition keys may begin with a number.
+	 */
+	public function test_stable_filter_and_condition_keys_may_begin_with_number(): void {
+		$registry = new CourseFilterRegistry( new CustomFilter( '1_custom' ) );
+		$query    = ( new CourseFilterPipeline(
+			$registry,
+			new PassThroughSearchExtensions()
+		) )->compose( new SearchCriteria() );
+
+		self::assertTrue( $registry->has( '1_custom' ) );
+		self::assertInstanceOf( CustomCondition::class, $query->condition( '1_custom' ) );
+	}
+
+	/**
 	 * The pipeline applies custom filters through the contract, not concrete types.
 	 */
 	public function test_pipeline_operates_on_filter_contract(): void {

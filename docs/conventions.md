@@ -59,8 +59,10 @@ from substituting multiple implementations. Small repetition across typed,
 semantically distinct criteria and identity APIs is preferable to collapsing
 them into generic collections or shared ID abstractions.
 
-New filters register through `course_discovery/register_filters` with a unique,
-stable lowercase key. Adding one must not require edits to existing filter
+`Plugin` composes core filters directly. Extension filters register through
+`course_discovery/register_filters` with a unique, stable lowercase key. Hooks
+extend the base registry; do not use public hooks as dependency injection for
+core services. Adding an extension must not require edits to existing filter
 implementations or the pipeline. Values within one condition are alternatives
 using OR, and independent conditions are combined using AND.
 
@@ -71,12 +73,24 @@ extension, and do not replace the typed API with `array<string, mixed>` or a
 generic key/value getter. Custom conditions must have translator support in
 every backend that executes them.
 
+WordPress condition translators implement
+`WordPressConditionTranslatorInterface`, own exactly one condition key, and
+are composed directly for core behavior. Extension translators register through
+`course_discovery/register_wordpress_condition_translators`. They may use raw
+`WP_Query` clauses only under Infrastructure. Do not add filter or translator
+inheritance hierarchies, a central condition `instanceof` chain, or let
+translators silently overwrite another condition's arguments.
+
 Application and Domain search classes must not expose `WP_Query`, `meta_query`,
 `tax_query`, posts, request globals, or REST request objects. WordPress hooks
 belong in the Infrastructure adapter, use stable public constants, and document
 their typed return contracts. Hooks belong at deliberate extension boundaries,
 not inside each filter or condition. Public extension keys must be stable and
-validated without silent normalization. `CourseQuery` must remain specific to
-Course Discovery search intent rather than becoming a generic query language or
-query AST. Stable public hooks are API contracts; add hooks only at intentional
-registration or transformation boundaries.
+validated without silent normalization. A key must be non-empty and already in
+its canonical lowercase form; WordPress adapters compare against
+`sanitize_key()`, while WordPress-independent code enforces the equivalent
+character set without depending on WordPress. Keys do not need to start with a
+letter. `CourseQuery` must remain specific to Course Discovery search intent
+rather than becoming a generic query language or query AST. Stable public hooks
+are API contracts; add hooks only at intentional registration or transformation
+boundaries.

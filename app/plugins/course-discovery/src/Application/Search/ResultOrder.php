@@ -29,8 +29,7 @@ final readonly class ResultOrder {
 	public function __construct(
 		private string $key
 	) {
-		// No native PHP validator expresses this exact semantic-key grammar.
-		if ( 1 !== preg_match( '/\A[a-z][a-z0-9_-]*\z/', $key ) ) {
+		if ( '' === $key || 1 !== preg_match( '/\A[a-z0-9_-]+\z/', $key ) ) {
 			throw new InvalidArgumentException( 'A result order key must be a stable lowercase identifier.' );
 		}
 	}

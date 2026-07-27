@@ -151,15 +151,12 @@ final readonly class CourseQuery {
 	/**
 	 * Validate one public condition key.
 	 *
-	 * No PHP filter expresses this exact extension-key grammar, so the explicit
-	 * format check remains at the query boundary.
-	 *
 	 * @param string $key Condition key.
 	 *
 	 * @throws InvalidArgumentException When the condition key is invalid.
 	 */
 	private static function validate_condition_key( string $key ): void {
-		if ( 1 !== preg_match( '/\A[a-z][a-z0-9_-]*\z/', $key ) ) {
+		if ( '' === $key || 1 !== preg_match( '/\A[a-z0-9_-]+\z/', $key ) ) {
 			throw new InvalidArgumentException( 'A Course query condition key must be a stable lowercase identifier.' );
 		}
 	}
