@@ -49,4 +49,4 @@ register_activation_hook(
 	)
 );
 
-new OxfordInternational\CourseDiscovery\Plugin()->register();
+( new OxfordInternational\CourseDiscovery\Plugin() )->register();

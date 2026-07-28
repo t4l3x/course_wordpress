@@ -97,8 +97,8 @@ final class Plugin {
 		$shortcode->register();
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
-			new CatalogueSeedCommand( new CatalogueSeeder( $metadata_store ) )->register();
-			new CourseDiscoverySetupCommand( new CourseDiscoveryPageInstaller() )->register();
+			( new CatalogueSeedCommand( new CatalogueSeeder( $metadata_store ) ) )->register();
+			( new CourseDiscoverySetupCommand( new CourseDiscoveryPageInstaller() ) )->register();
 		}
 	}
 
