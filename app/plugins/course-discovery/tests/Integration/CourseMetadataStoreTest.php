@@ -11,6 +11,7 @@ namespace OxfordInternational\CourseDiscovery\Tests\Integration;
 
 use InvalidArgumentException;
 use OxfordInternational\CourseDiscovery\Domain\Course\CourseId;
+use OxfordInternational\CourseDiscovery\Domain\Course\Currency;
 use OxfordInternational\CourseDiscovery\Domain\Course\Price;
 use OxfordInternational\CourseDiscovery\Domain\Course\StartDate;
 use OxfordInternational\CourseDiscovery\Domain\Instructor\InstructorId;
@@ -29,15 +30,15 @@ use WP_UnitTestCase;
  */
 final class CourseMetadataStoreTest extends WP_UnitTestCase {
 	/**
-	 * Price round-trips without introducing floating-point conversion.
+	 * Price amount and currency round-trip through independent metadata keys.
 	 */
-	public function test_price_round_trips_as_a_decimal_string(): void {
+	public function test_price_round_trips_as_independent_amount_and_currency_values(): void {
 		$course_id = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
 		$store     = new CourseMetadataStore();
 
 		self::assertNull( $store->price( $course_id ) );
 
-		$price = Price::from_decimal( '125.50' );
+		$price = Price::from_decimal( '125.50', Currency::EUR );
 
 		$store->save_price( $course_id, $price );
 		$store->save_price( $course_id, $price );
@@ -45,11 +46,17 @@ final class CourseMetadataStoreTest extends WP_UnitTestCase {
 		$stored_price = $store->price( $course_id );
 
 		self::assertInstanceOf( Price::class, $stored_price );
-		self::assertSame( '125.5', $stored_price->decimal() );
+		self::assertSame( '125.5', $stored_price->amount() );
+		self::assertSame( Currency::EUR, $stored_price->currency() );
 		self::assertSame(
 			'125.5',
-			get_post_meta( $course_id->value(), CourseMeta::PRICE_KEY, true )
+			get_post_meta( $course_id->value(), CourseMeta::PRICE_AMOUNT_KEY, true )
 		);
+		self::assertSame(
+			'EUR',
+			get_post_meta( $course_id->value(), CourseMeta::PRICE_CURRENCY_KEY, true )
+		);
+		self::assertFalse( metadata_exists( 'post', $course_id->value(), CourseMeta::LEGACY_PRICE_KEY ) );
 	}
 
 	/**
@@ -59,24 +66,29 @@ final class CourseMetadataStoreTest extends WP_UnitTestCase {
 		$course_id = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
 		$store     = new CourseMetadataStore();
 
-		$store->save_price( $course_id, Price::from_decimal( '125.5' ) );
+		$store->save_price( $course_id, Price::from_decimal( '125.5', Currency::GBP ) );
 		$store->remove_price( $course_id );
 		$store->remove_price( $course_id );
 
 		self::assertNull( $store->price( $course_id ) );
-		self::assertFalse( metadata_exists( 'post', $course_id->value(), CourseMeta::PRICE_KEY ) );
+		self::assertFalse( metadata_exists( 'post', $course_id->value(), CourseMeta::PRICE_AMOUNT_KEY ) );
+		self::assertFalse( metadata_exists( 'post', $course_id->value(), CourseMeta::PRICE_CURRENCY_KEY ) );
 	}
 
 	/**
-	 * A rejected price deletion is reported and preserves the existing value.
+	 * Failure of the second deletion restores the complete existing pair.
 	 */
-	public function test_failed_price_removal_preserves_the_existing_value(): void {
-		$course_id      = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
-		$store          = new CourseMetadataStore();
-		$reject_removal = static fn (): bool => false;
+	public function test_failed_currency_removal_restores_the_existing_price_pair(): void {
+		$course_id               = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
+		$store                   = new CourseMetadataStore();
+		$reject_currency_removal = static function ( mixed $check, int $object_id, string $meta_key ): mixed {
+			unset( $object_id );
 
-		$store->save_price( $course_id, Price::from_decimal( '125.5' ) );
-		add_filter( 'delete_post_metadata', $reject_removal );
+			return CourseMeta::PRICE_CURRENCY_KEY === $meta_key ? false : $check;
+		};
+
+		$store->save_price( $course_id, Price::from_decimal( '125.5', Currency::USD ) );
+		add_filter( 'delete_post_metadata', $reject_currency_removal, 10, 3 );
 
 		try {
 			$store->remove_price( $course_id );
@@ -84,13 +96,14 @@ final class CourseMetadataStoreTest extends WP_UnitTestCase {
 		} catch ( RuntimeException $exception ) {
 			self::assertSame( 'WordPress could not remove the course price.', $exception->getMessage() );
 		} finally {
-			remove_filter( 'delete_post_metadata', $reject_removal );
+			remove_filter( 'delete_post_metadata', $reject_currency_removal );
 		}
 
 		$stored_price = $store->price( $course_id );
 
 		self::assertInstanceOf( Price::class, $stored_price );
-		self::assertSame( '125.5', $stored_price->decimal() );
+		self::assertSame( '125.5', $stored_price->amount() );
+		self::assertSame( Currency::USD, $stored_price->currency() );
 	}
 
 	/**
@@ -177,11 +190,11 @@ final class CourseMetadataStoreTest extends WP_UnitTestCase {
 		$store         = new CourseMetadataStore();
 		$reject_update = static fn (): bool => false;
 
-		$store->save_price( $course_id, Price::from_decimal( '10' ) );
+		$store->save_price( $course_id, Price::from_decimal( '10', Currency::GBP ) );
 		add_filter( 'update_post_metadata', $reject_update );
 
 		try {
-			$store->save_price( $course_id, Price::from_decimal( '20' ) );
+			$store->save_price( $course_id, Price::from_decimal( '20', Currency::EUR ) );
 			self::fail( 'A rejected metadata update should raise an exception.' );
 		} catch ( RuntimeException $exception ) {
 			self::assertSame( 'WordPress could not persist the course price.', $exception->getMessage() );
@@ -192,42 +205,151 @@ final class CourseMetadataStoreTest extends WP_UnitTestCase {
 		$stored_price = $store->price( $course_id );
 
 		self::assertInstanceOf( Price::class, $stored_price );
-		self::assertSame( '10', $stored_price->decimal() );
+		self::assertSame( '10', $stored_price->amount() );
+		self::assertSame( Currency::GBP, $stored_price->currency() );
 	}
 
 	/**
-	 * Invalid stored price syntax is translated without losing its cause.
+	 * Failure of the second write restores the complete existing pair.
 	 */
-	public function test_invalid_stored_price_preserves_validation_context(): void {
+	public function test_rejected_currency_update_restores_the_existing_price_pair(): void {
+		$course_id              = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
+		$store                  = new CourseMetadataStore();
+		$reject_currency_update = static function ( mixed $check, int $object_id, string $meta_key ): mixed {
+			unset( $object_id );
+
+			return CourseMeta::PRICE_CURRENCY_KEY === $meta_key ? false : $check;
+		};
+
+		$store->save_price( $course_id, Price::from_decimal( '10', Currency::GBP ) );
+		add_filter( 'update_post_metadata', $reject_currency_update, 10, 3 );
+
+		try {
+			$store->save_price( $course_id, Price::from_decimal( '20', Currency::EUR ) );
+			self::fail( 'A rejected currency update should raise an exception.' );
+		} catch ( RuntimeException $exception ) {
+			self::assertSame( 'WordPress could not persist the course price.', $exception->getMessage() );
+		} finally {
+			remove_filter( 'update_post_metadata', $reject_currency_update );
+		}
+
+		$stored_price = $store->price( $course_id );
+
+		self::assertInstanceOf( Price::class, $stored_price );
+		self::assertSame( '10', $stored_price->amount() );
+		self::assertSame( Currency::GBP, $stored_price->currency() );
+	}
+
+	/**
+	 * Legacy amount-only metadata is never assigned an implicit currency.
+	 */
+	public function test_legacy_only_price_is_ignored_without_currency_inference(): void {
 		$course_id = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
 		$store     = new CourseMetadataStore();
 
-		$this->add_unvalidated_metadata( $course_id, CourseMeta::PRICE_KEY, 'not-a-price' );
+		self::assertNotFalse( add_post_meta( $course_id->value(), CourseMeta::LEGACY_PRICE_KEY, '125.5' ) );
+
+		self::assertNull( $store->price( $course_id ) );
+		self::assertFalse( metadata_exists( 'post', $course_id->value(), CourseMeta::PRICE_AMOUNT_KEY ) );
+		self::assertFalse( metadata_exists( 'post', $course_id->value(), CourseMeta::PRICE_CURRENCY_KEY ) );
+	}
+
+	/**
+	 * A partially stored new price fails explicitly.
+	 *
+	 * @dataProvider incomplete_price_metadata_provider
+	 *
+	 * @param string $meta_key Price metadata key.
+	 * @param string $value    Valid scalar without its pair.
+	 */
+	public function test_incomplete_price_metadata_is_rejected( string $meta_key, string $value ): void {
+		$course_id = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
+		$store     = new CourseMetadataStore();
+
+		self::assertNotFalse( add_post_meta( $course_id->value(), $meta_key, $value ) );
+		$this->expectException( UnexpectedValueException::class );
+		$this->expectExceptionMessage( 'Stored course price metadata is incomplete.' );
+
+		$store->price( $course_id );
+	}
+
+	/**
+	 * Incomplete new price examples.
+	 *
+	 * @return array<string, array{string, string}>
+	 */
+	public static function incomplete_price_metadata_provider(): array {
+		return array(
+			'amount only'   => array( CourseMeta::PRICE_AMOUNT_KEY, '125.5' ),
+			'currency only' => array( CourseMeta::PRICE_CURRENCY_KEY, 'GBP' ),
+		);
+	}
+
+	/**
+	 * Invalid stored amount syntax is translated without losing its cause.
+	 */
+	public function test_invalid_stored_price_amount_preserves_validation_context(): void {
+		$course_id = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
+		$store     = new CourseMetadataStore();
+
+		$this->add_unvalidated_metadata( $course_id, CourseMeta::PRICE_AMOUNT_KEY, 'not-a-price' );
+		self::assertNotFalse( add_post_meta( $course_id->value(), CourseMeta::PRICE_CURRENCY_KEY, 'GBP' ) );
 
 		try {
 			$store->price( $course_id );
-			self::fail( 'An invalid stored price should raise an exception.' );
+			self::fail( 'An invalid stored price amount should raise an exception.' );
 		} catch ( UnexpectedValueException $exception ) {
 			self::assertInstanceOf( InvalidArgumentException::class, $exception->getPrevious() );
 		}
 	}
 
 	/**
-	 * Invalid stored price types are rejected directly rather than coerced.
+	 * Invalid stored amount types are rejected directly rather than coerced.
 	 */
-	public function test_non_string_stored_price_is_rejected_directly(): void {
+	public function test_non_string_stored_price_amount_is_rejected_directly(): void {
 		$course_id = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
 		$store     = new CourseMetadataStore();
 
-		$this->add_unvalidated_metadata( $course_id, CourseMeta::PRICE_KEY, array( '12' ) );
+		$this->add_unvalidated_metadata( $course_id, CourseMeta::PRICE_AMOUNT_KEY, array( '12' ) );
+		self::assertNotFalse( add_post_meta( $course_id->value(), CourseMeta::PRICE_CURRENCY_KEY, 'GBP' ) );
 
 		try {
 			$store->price( $course_id );
-			self::fail( 'A non-string stored price should raise an exception.' );
+			self::fail( 'A non-string stored price amount should raise an exception.' );
 		} catch ( UnexpectedValueException $exception ) {
-			self::assertSame( 'Stored course price must be a string.', $exception->getMessage() );
+			self::assertSame( 'Stored course price amount must be a string.', $exception->getMessage() );
 			self::assertNull( $exception->getPrevious() );
 		}
+	}
+
+	/**
+	 * Unsupported stored currencies are rejected rather than inferred.
+	 */
+	public function test_unsupported_stored_price_currency_is_rejected(): void {
+		$course_id = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
+		$store     = new CourseMetadataStore();
+
+		self::assertNotFalse( add_post_meta( $course_id->value(), CourseMeta::PRICE_AMOUNT_KEY, '12' ) );
+		$this->add_unvalidated_metadata( $course_id, CourseMeta::PRICE_CURRENCY_KEY, 'CAD' );
+		$this->expectException( UnexpectedValueException::class );
+		$this->expectExceptionMessage( 'Stored course price currency is unsupported.' );
+
+		$store->price( $course_id );
+	}
+
+	/**
+	 * Invalid stored currency types are rejected directly rather than coerced.
+	 */
+	public function test_non_string_stored_price_currency_is_rejected_directly(): void {
+		$course_id = new CourseId( $this->create_post( CoursePostType::POST_TYPE ) );
+		$store     = new CourseMetadataStore();
+
+		self::assertNotFalse( add_post_meta( $course_id->value(), CourseMeta::PRICE_AMOUNT_KEY, '12' ) );
+		$this->add_unvalidated_metadata( $course_id, CourseMeta::PRICE_CURRENCY_KEY, array( 'GBP' ) );
+		$this->expectException( UnexpectedValueException::class );
+		$this->expectExceptionMessage( 'Stored course price currency must be a string.' );
+
+		$store->price( $course_id );
 	}
 
 	/**
@@ -419,10 +541,11 @@ final class CourseMetadataStoreTest extends WP_UnitTestCase {
 	 */
 	private function add_unvalidated_metadata( CourseId $course_id, string $meta_key, mixed $value ): void {
 		$sanitize_callbacks = array(
-			CourseMeta::PRICE_KEY         => array( CourseMeta::class, 'sanitize_price' ),
-			CourseMeta::PROVIDER_ID_KEY   => array( CourseMeta::class, 'sanitize_provider_id' ),
-			CourseMeta::INSTRUCTOR_ID_KEY => array( CourseMeta::class, 'sanitize_instructor_id' ),
-			CourseMeta::START_DATE_KEY    => array( CourseMeta::class, 'sanitize_start_date' ),
+			CourseMeta::PRICE_AMOUNT_KEY   => array( CourseMeta::class, 'sanitize_price_amount' ),
+			CourseMeta::PRICE_CURRENCY_KEY => array( CourseMeta::class, 'sanitize_price_currency' ),
+			CourseMeta::PROVIDER_ID_KEY    => array( CourseMeta::class, 'sanitize_provider_id' ),
+			CourseMeta::INSTRUCTOR_ID_KEY  => array( CourseMeta::class, 'sanitize_instructor_id' ),
+			CourseMeta::START_DATE_KEY     => array( CourseMeta::class, 'sanitize_start_date' ),
 		);
 		$sanitize_hook      = sprintf(
 			'sanitize_post_meta_%s_for_%s',

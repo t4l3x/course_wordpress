@@ -21,6 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *     form_action: string,
  *     clear_url: string,
  *     search_term: string,
+ *     search_term_max_length: int,
  *     per_page: int,
  *     active_filter_count: int,
  *     has_active_filters: bool,
@@ -42,6 +43,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *         name: string,
  *         short_description: string,
  *         price: ?string,
+ *         price_currency: ?string,
  *         providers: list<string>,
  *         locations: list<string>,
  *         instructors: list<string>,
@@ -87,6 +89,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<input
 						class="course-discovery__search-input"
 						id="<?php echo esc_attr( $course_discovery_view['instance_id'] . '-search' ); ?>"
+						maxlength="<?php echo esc_attr( (string) $course_discovery_view['search_term_max_length'] ); ?>"
 						name="q"
 						placeholder="<?php esc_attr_e( 'Search courses, subjects, or keywords', 'course-discovery' ); ?>"
 						type="search"
@@ -376,7 +379,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 									<?php if ( null !== $course_discovery_course['price'] ) : ?>
 										<div class="course-discovery__card-price">
 											<dt><?php esc_html_e( 'Price', 'course-discovery' ); ?></dt>
-											<dd><?php echo esc_html( $course_discovery_course['price'] ); ?></dd>
+											<dd>
+												<?php echo esc_html( $course_discovery_course['price'] ); ?>
+												<?php if ( null !== $course_discovery_course['price_currency'] ) : ?>
+													<span class="course-discovery__visually-hidden">
+														<?php echo esc_html( ' (' . $course_discovery_course['price_currency'] . ')' ); ?>
+													</span>
+												<?php endif; ?>
+											</dd>
 										</div>
 									<?php endif; ?>
 								</dl>

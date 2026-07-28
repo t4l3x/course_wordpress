@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxfordInternational\CourseDiscovery\Tests\Integration;
 
 use OxfordInternational\CourseDiscovery\Domain\Course\CourseId;
+use OxfordInternational\CourseDiscovery\Domain\Course\Currency;
 use OxfordInternational\CourseDiscovery\Domain\Course\Price;
 use OxfordInternational\CourseDiscovery\Domain\Course\StartDate;
 use OxfordInternational\CourseDiscovery\Domain\Instructor\InstructorId;
@@ -52,7 +53,10 @@ final class CourseMetaSaveHandlerTest extends WP_UnitTestCase {
 
 		self::assertSame(
 			array(
-				'price'       => '125.5',
+				'price'       => array(
+					'amount'   => '125.5',
+					'currency' => 'GBP',
+				),
 				'providers'   => array( $provider_one, $provider_two ),
 				'instructors' => array( $instructor_one, $instructor_two ),
 				'start_dates' => array( '2026-09', '2027-01' ),
@@ -118,8 +122,126 @@ final class CourseMetaSaveHandlerTest extends WP_UnitTestCase {
 			$this->metadata_snapshot( $course_id )
 		);
 		self::assertFalse(
-			metadata_exists( 'post', $course_id, CourseMeta::PRICE_KEY )
+			metadata_exists( 'post', $course_id, CourseMeta::PRICE_AMOUNT_KEY )
 		);
+		self::assertFalse(
+			metadata_exists( 'post', $course_id, CourseMeta::PRICE_CURRENCY_KEY )
+		);
+	}
+
+	/**
+	 * Every supported currency is accepted by the native admin save boundary.
+	 *
+	 * @dataProvider supported_currency_provider
+	 *
+	 * @param Currency $currency Supported currency.
+	 */
+	public function test_supported_currency_is_accepted( Currency $currency ): void {
+		$administrator_id = $this->create_user( 'administrator' );
+		$course_id        = $this->create_post( CoursePostType::POST_TYPE, 'Admin Course' );
+
+		$this->submit_course_form(
+			$administrator_id,
+			$course_id,
+			$this->form_fields(
+				'1250.00',
+				array( '' ),
+				array( '' ),
+				array( '' ),
+				$currency->value
+			)
+		);
+
+		self::assertSame(
+			array(
+				'amount'   => '1250',
+				'currency' => $currency->value,
+			),
+			$this->metadata_snapshot( $course_id )['price']
+		);
+	}
+
+	/**
+	 * Supported admin currency examples.
+	 *
+	 * @return array<string, array{Currency}>
+	 */
+	public static function supported_currency_provider(): array {
+		return array(
+			'GBP' => array( Currency::GBP ),
+			'EUR' => array( Currency::EUR ),
+			'USD' => array( Currency::USD ),
+		);
+	}
+
+	/**
+	 * Invalid price fields reject the complete Course details request.
+	 *
+	 * @dataProvider invalid_price_field_provider
+	 *
+	 * @param string $field         Price request field.
+	 * @param mixed  $invalid_value Invalid request value.
+	 */
+	public function test_invalid_price_fields_preserve_all_metadata(
+		string $field,
+		mixed $invalid_value
+	): void {
+		$administrator_id = $this->create_user( 'administrator' );
+		$course_id        = $this->create_post( CoursePostType::POST_TYPE, 'Admin Course' );
+		$provider_one     = $this->create_post( ProviderPostType::POST_TYPE, 'Provider One' );
+		$provider_two     = $this->create_post( ProviderPostType::POST_TYPE, 'Provider Two' );
+		$instructor_one   = $this->create_post( InstructorPostType::POST_TYPE, 'Instructor One' );
+		$instructor_two   = $this->create_post( InstructorPostType::POST_TYPE, 'Instructor Two' );
+
+		$this->seed_metadata( $course_id, $provider_one, $instructor_one );
+		$before           = $this->metadata_snapshot( $course_id );
+		$fields           = $this->changed_form_fields( $provider_two, $instructor_two );
+		$fields[ $field ] = $invalid_value;
+
+		$this->submit_course_form( $administrator_id, $course_id, $fields );
+
+		self::assertSame( $before, $this->metadata_snapshot( $course_id ) );
+		$this->assert_invalid_request_was_flagged();
+	}
+
+	/**
+	 * Invalid admin price examples.
+	 *
+	 * @return array<string, array{string, mixed}>
+	 */
+	public static function invalid_price_field_provider(): array {
+		return array(
+			'malformed amount'            => array( CourseMetaBox::PRICE_AMOUNT_FIELD, '12.3.4' ),
+			'negative amount'             => array( CourseMetaBox::PRICE_AMOUNT_FIELD, '-1' ),
+			'amount is not scalar text'   => array( CourseMetaBox::PRICE_AMOUNT_FIELD, array( '10' ) ),
+			'unsupported currency'        => array( CourseMetaBox::PRICE_CURRENCY_FIELD, 'CAD' ),
+			'blank currency'              => array( CourseMetaBox::PRICE_CURRENCY_FIELD, '' ),
+			'currency is not scalar text' => array( CourseMetaBox::PRICE_CURRENCY_FIELD, array( 'GBP' ) ),
+		);
+	}
+
+	/**
+	 * A blank amount still requires a supported submitted currency.
+	 */
+	public function test_blank_amount_with_unsupported_currency_is_rejected(): void {
+		$administrator_id = $this->create_user( 'administrator' );
+		$course_id        = $this->create_post( CoursePostType::POST_TYPE, 'Admin Course' );
+		$provider_one     = $this->create_post( ProviderPostType::POST_TYPE, 'Provider One' );
+		$provider_two     = $this->create_post( ProviderPostType::POST_TYPE, 'Provider Two' );
+		$instructor_one   = $this->create_post( InstructorPostType::POST_TYPE, 'Instructor One' );
+		$instructor_two   = $this->create_post( InstructorPostType::POST_TYPE, 'Instructor Two' );
+
+		$this->seed_metadata( $course_id, $provider_one, $instructor_one );
+		$before = $this->metadata_snapshot( $course_id );
+		$fields = $this->changed_form_fields( $provider_two, $instructor_two );
+
+		$fields[ CourseMetaBox::PRICE_AMOUNT_FIELD ]   = '';
+		$fields[ CourseMetaBox::PRICE_CURRENCY_FIELD ] = 'CAD';
+
+		$this->submit_course_form( $administrator_id, $course_id, $fields );
+
+		self::assertSame( $before, $this->metadata_snapshot( $course_id ) );
+		$this->assert_invalid_request_was_flagged();
 	}
 
 	/**
@@ -145,7 +267,10 @@ final class CourseMetaSaveHandlerTest extends WP_UnitTestCase {
 
 		self::assertSame(
 			array(
-				'price'       => '10',
+				'price'       => array(
+					'amount'   => '10',
+					'currency' => 'GBP',
+				),
 				'providers'   => array(),
 				'instructors' => array(),
 				'start_dates' => array(),
@@ -540,10 +665,11 @@ final class CourseMetaSaveHandlerTest extends WP_UnitTestCase {
 	/**
 	 * Build the raw shape emitted by the Course metadata form.
 	 *
-	 * @param string $price       Price field.
+	 * @param string $price       Price amount field.
 	 * @param array  $providers   Provider identifier fields.
 	 * @param array  $instructors Instructor identifier fields.
 	 * @param array  $start_dates Start-date fields.
+	 * @param string $currency    Price currency field.
 	 *
 	 * @phpstan-param list<string> $providers
 	 * @phpstan-param list<string> $instructors
@@ -555,13 +681,15 @@ final class CourseMetaSaveHandlerTest extends WP_UnitTestCase {
 		string $price,
 		array $providers,
 		array $instructors,
-		array $start_dates
+		array $start_dates,
+		string $currency = 'GBP'
 	): array {
 		return array(
-			CourseMetaBox::PRICE_FIELD       => $price,
-			CourseMetaBox::PROVIDERS_FIELD   => $providers,
-			CourseMetaBox::INSTRUCTORS_FIELD => $instructors,
-			CourseMetaBox::START_DATES_FIELD => $start_dates,
+			CourseMetaBox::PRICE_AMOUNT_FIELD   => $price,
+			CourseMetaBox::PRICE_CURRENCY_FIELD => $currency,
+			CourseMetaBox::PROVIDERS_FIELD      => $providers,
+			CourseMetaBox::INSTRUCTORS_FIELD    => $instructors,
+			CourseMetaBox::START_DATES_FIELD    => $start_dates,
 		);
 	}
 
@@ -610,7 +738,7 @@ final class CourseMetaSaveHandlerTest extends WP_UnitTestCase {
 		$course = new CourseId( $course_id );
 		$store  = new CourseMetadataStore();
 
-		$store->save_price( $course, Price::from_decimal( '10' ) );
+		$store->save_price( $course, Price::from_decimal( '10', Currency::GBP ) );
 		$store->replace_providers( $course, new ProviderId( $provider_id ) );
 		$store->replace_instructors( $course, new InstructorId( $instructor_id ) );
 		$store->replace_start_dates( $course, new StartDate( '2026-09' ) );
@@ -622,7 +750,7 @@ final class CourseMetaSaveHandlerTest extends WP_UnitTestCase {
 	 * @param int $course_id Course identifier.
 	 *
 	 * @return array{
-	 *     price: string|null,
+	 *     price: array{amount: string, currency: string}|null,
 	 *     providers: list<int>,
 	 *     instructors: list<int>,
 	 *     start_dates: list<string>
@@ -634,7 +762,12 @@ final class CourseMetaSaveHandlerTest extends WP_UnitTestCase {
 		$price  = $store->price( $course );
 
 		return array(
-			'price'       => null === $price ? null : $price->decimal(),
+			'price'       => null === $price
+				? null
+				: array(
+					'amount'   => $price->amount(),
+					'currency' => $price->currency()->value,
+				),
 			'providers'   => array_map(
 				static fn ( ProviderId $provider_id ): int => $provider_id->value(),
 				$store->providers( $course )

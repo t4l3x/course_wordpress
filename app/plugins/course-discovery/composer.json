@@ -4,7 +4,7 @@
   "license": "GPL-2.0-or-later",
   "type": "wordpress-plugin",
   "require": {
-    "php": "^8.5"
+    "php": "^8.3"
   },
   "require-dev": {
     "brain/monkey": "^2.7.0",
@@ -37,6 +37,9 @@
       "ergebnis/composer-normalize": true
     },
     "optimize-autoloader": true,
+    "platform": {
+      "php": "8.3.0"
+    },
     "sort-packages": true
   },
   "scripts": {

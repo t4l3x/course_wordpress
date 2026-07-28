@@ -4,9 +4,9 @@
 .idea
 .vscode
 database.sql
+dist
 exports
 node_modules
 tmp
 upload
 vendor
-

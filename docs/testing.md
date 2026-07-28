@@ -5,9 +5,10 @@ Run focused suites while developing and `make quality` before finishing.
 ## Test layers
 
 - **Unit tests** cover WordPress-independent domain and application behavior
-  without loading WordPress: identifier validation, price validation, strict
-  `YYYY-MM` start dates, search criteria normalization, filter semantics,
-  registry behavior, and query composition.
+  without loading WordPress: identifier validation, exact price-amount
+  canonicalization, supported-currency validation, strict `YYYY-MM` start
+  dates, search criteria normalization, filter semantics, registry behavior,
+  and query composition.
 - **Integration tests** boot the real WordPress test framework. They verify post
   type supports, taxonomy registration and attachment, metadata schemas,
   repeatable metadata representation, registration hook customization, and real
@@ -16,6 +17,10 @@ Run focused suites while developing and `make quality` before finishing.
   boundaries. The Course Discovery shortcode tests exercise public GET input
   through the real filter/search pipeline, result preparation, template
   rendering, and asset enqueueing without duplicating translator semantics.
+- **Example integration tests** load optional extension code in the real
+  WordPress environment. The price-ceiling proof covers supported input,
+  currency isolation, translator registration, and conservative exclusion at
+  its exact `DECIMAL(65,30)` boundary.
 - **End-to-end tests** exercise the deployed HTTP/browser stack when a frontend
   or public API makes that cost worthwhile. They complement rather than replace
   unit, integration, and feature coverage.
@@ -26,6 +31,7 @@ Use:
 make test-unit
 make test-integration
 make test-feature
+make test-examples
 make test
 ```
 
@@ -37,19 +43,38 @@ feature suites load the installed WordPress PHPUnit functions and bootstrap, so
 their `WP_UnitTestCase`, factories, functions, hooks, and metadata behavior are
 the real WordPress implementations rather than test doubles.
 
+## Continuous integration
+
+GitHub Actions keeps failures attributable to one quality layer. Separate jobs
+run strict Composer validation, locked-dependency audit, PHP syntax checks,
+WordPress Coding Standards, PHPStan, unit tests, real-WordPress integration
+tests, optional example integration tests, feature tests, and vanilla
+JavaScript syntax checks. PHP lint includes the optional example plugin and
+distribution helper rather than checking only production plugin classes.
+
+The supported runtime minimum is PHP 8.3; Docker development remains on PHP
+8.5. Unit tests run on PHP 8.3, 8.4, and 8.5. Integration tests run on PHP 8.3
+and 8.5 with WordPress 7.0.2 and an isolated MariaDB 12.3.2 service. Feature
+tests run the same real stack on PHP 8.5, and JavaScript syntax is checked with
+Node 22.23.1. This matrix checks the minimum and development runtime without
+claiming that isolated unit tests alone prove WordPress compatibility.
+
 ## Risk and regression coverage
 
 High-risk areas include hook timing and customized registration arguments,
-taxonomy attachment, metadata type and cardinality, corrupted persisted values,
-relationship identifier validation and replacement behavior, de-duplication and
-ordering, empty replacement, date/price validation, authorization at write
-boundaries, and accidental WordPress dependencies in the domain. Put each
-regression test at the lowest layer that can reproduce the failure, adding a
-broader test only when the integration itself is significant.
+taxonomy attachment, metadata type and cardinality, paired price amount and
+currency persistence, legacy-only price handling, corrupted persisted values,
+relationship identifier validation and replacement behavior, de-duplication
+and ordering, empty replacement, date/price validation, authorization at write
+boundaries, REST price-pair final-state validation, isolation of invalid values
+from unrelated presenter data, and accidental WordPress dependencies in the
+domain. Put each regression test at the lowest layer that can reproduce the
+failure, adding a broader test only when the integration itself is significant.
 
 For Course administration, regression coverage must include meta-box
 registration scope, post-type checks, nonce and capability enforcement,
-autosave and revision guards, clearing optional metadata, wrong-post-type
+autosave and revision guards, supported and unsupported currencies, paired
+amount-and-currency validation, clearing optional metadata, wrong-post-type
 Provider and Instructor IDs, and validation of the complete submission before
 any destructive replacement. These paths belong in the real WordPress
 integration environment rather than mocked unit tests.
@@ -85,19 +110,22 @@ high-risk regression areas. Custom-criteria tests must also cover empty
 semantics, duplicate keys, and immutable replacement.
 
 The public frontend adds boundary-focused integration coverage for typed GET
-parsing, positive ID validation, canonical start-date validation, pagination
-bounds, published Provider options, Location terms, distinct chronological
-start months, hierarchical Categories, and typed option extension hooks. Feature
-coverage verifies shortcode registration, selected-value persistence, modeled
-result fields, result counts, both empty states, escaping, asset enqueueing, and
-pagination URLs preserving every active filter. CSS implementation details and
-simple drawer event wiring are intentionally not asserted.
+parsing, positive ID validation, canonical start-date validation, the sanitized
+search-term limit, bounded and deduplicated multi-select values, page and
+per-page bounds, published Provider options, Location terms, distinct
+chronological start months, hierarchical Categories, and typed option extension
+hooks. Feature coverage verifies shortcode
+registration, selected-value persistence, modeled result fields, result counts,
+both empty states, escaping, asset enqueueing, and pagination URLs preserving
+every active filter. CSS implementation details and simple drawer event wiring
+are intentionally not asserted.
 
 The development catalogue seeder is exercised in the real WordPress integration
 suite. Its regression verifies two identical runs do not duplicate content,
 modeled metadata is written through `CourseMetadataStore`, Provider Locations
-and hierarchical Course Categories are assigned through native taxonomies, and
-reset removes the marked seed catalogue.
+and hierarchical Course Categories are assigned through native taxonomies, all
+of GBP, EUR, and USD appear in the generated catalogue, and reset removes the
+marked seed catalogue.
 
 Landing-page installer integration tests verify canonical full-width Group and
 Shortcode-block creation, repeatable page reuse, preservation of existing

@@ -34,6 +34,7 @@ use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Setup\CourseDis
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Setup\CourseDiscoverySetupCommand;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CourseDiscoveryShortcode;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CourseFilterOptions;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CoursePriceFormatter;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CourseResultPresenter;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CourseSearchRequestParser;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\Translator\CategoryConditionTranslator;
@@ -69,7 +70,7 @@ final class Plugin {
 			$this->course_filter_pipeline(),
 			$this->course_search(),
 			new CourseFilterOptions(),
-			new CourseResultPresenter( $metadata_store ),
+			new CourseResultPresenter( $metadata_store, new CoursePriceFormatter() ),
 			dirname( __DIR__ ) . '/course-discovery.php',
 			dirname( __DIR__ ) . '/templates/course-discovery.php',
 			COURSE_DISCOVERY_VERSION
@@ -96,8 +97,8 @@ final class Plugin {
 		$shortcode->register();
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
-			( new CatalogueSeedCommand( new CatalogueSeeder( $metadata_store ) ) )->register();
-			( new CourseDiscoverySetupCommand( new CourseDiscoveryPageInstaller() ) )->register();
+			new CatalogueSeedCommand( new CatalogueSeeder( $metadata_store ) )->register();
+			new CourseDiscoverySetupCommand( new CourseDiscoveryPageInstaller() )->register();
 		}
 	}
 

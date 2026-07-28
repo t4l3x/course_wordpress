@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Admin;
 
 use OxfordInternational\CourseDiscovery\Domain\Course\CourseId;
+use OxfordInternational\CourseDiscovery\Domain\Course\Currency;
 use OxfordInternational\CourseDiscovery\Domain\Course\Price;
 use OxfordInternational\CourseDiscovery\Domain\Course\StartDate;
 use OxfordInternational\CourseDiscovery\Domain\Instructor\InstructorId;
@@ -29,7 +30,8 @@ final class CourseMetaBox {
 	public const string START_DATES_META_BOX_ID   = 'course_discovery_course_start_dates';
 	public const string NONCE_ACTION              = 'course_discovery_save_course_details';
 	public const string NONCE_NAME                = 'course_discovery_course_details_nonce';
-	public const string PRICE_FIELD               = 'course_discovery_price';
+	public const string PRICE_AMOUNT_FIELD        = 'course_discovery_price_amount';
+	public const string PRICE_CURRENCY_FIELD      = 'course_discovery_price_currency';
 	public const string PROVIDERS_FIELD           = 'course_discovery_provider_ids';
 	public const string INSTRUCTORS_FIELD         = 'course_discovery_instructor_ids';
 	public const string START_DATES_FIELD         = 'course_discovery_start_dates';
@@ -146,33 +148,54 @@ final class CourseMetaBox {
 	}
 
 	/**
-	 * Render the canonical decimal price field.
+	 * Render the exact amount and supported currency fields.
 	 *
 	 * @param Price|null $price Existing Course price.
 	 */
 	private function render_price_field( ?Price $price ): void {
-		$value = null === $price ? '' : $price->decimal();
+		$amount   = null === $price ? '' : $price->amount();
+		$currency = null === $price ? Currency::GBP : $price->currency();
 		?>
 		<p>
-			<label for="course-discovery-price">
-				<strong><?php esc_html_e( 'Price', 'course-discovery' ); ?></strong>
+			<label for="course-discovery-price-amount">
+				<strong><?php esc_html_e( 'Price amount', 'course-discovery' ); ?></strong>
 			</label>
 		</p>
 		<input
 			class="widefat"
-			id="course-discovery-price"
-			name="<?php echo esc_attr( self::PRICE_FIELD ); ?>"
+			id="course-discovery-price-amount"
+			name="<?php echo esc_attr( self::PRICE_AMOUNT_FIELD ); ?>"
 			type="number"
 			min="0"
 			step="any"
 			inputmode="decimal"
-			value="<?php echo esc_attr( $value ); ?>"
+			value="<?php echo esc_attr( $amount ); ?>"
 			aria-describedby="course-discovery-price-description"
 		/>
+		<p>
+			<label for="course-discovery-price-currency">
+				<strong><?php esc_html_e( 'Currency', 'course-discovery' ); ?></strong>
+			</label>
+		</p>
+		<select
+			class="widefat"
+			id="course-discovery-price-currency"
+			name="<?php echo esc_attr( self::PRICE_CURRENCY_FIELD ); ?>"
+			aria-describedby="course-discovery-price-description"
+		>
+			<?php foreach ( Currency::cases() as $option ) : ?>
+				<option
+					value="<?php echo esc_attr( $option->value ); ?>"
+					<?php echo selected( $option->value, $currency->value, false ); ?>
+				>
+					<?php echo esc_html( $option->value ); ?>
+				</option>
+			<?php endforeach; ?>
+		</select>
 		<p class="description" id="course-discovery-price-description">
 			<?php
 			esc_html_e(
-				'Enter a non-negative decimal amount. No currency or display precision is assumed. Leave blank for no price.',
+				'Enter a non-negative decimal amount and choose its currency. Leave the amount blank for no price.',
 				'course-discovery'
 			);
 			?>

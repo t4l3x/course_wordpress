@@ -14,13 +14,14 @@ It is designed to sit within a wide range of WordPress themes without changing
 global headings, forms, buttons, links, or page layout.
 
 The generated page uses a native full-width Group block and the shortcode root
-carries WordPress's `alignfull` class. A scoped `100vw` fallback with calculated
-negative horizontal margins deliberately outranks later block-theme rules that
-set constrained children to a fixed maximum width and `auto !important`
-margins. This makes the catalogue surface span the viewport while retaining the
-theme's own header and page title. Themes that deliberately clip descendant
-overflow may still require their own full-width page template; the plugin does
-not target theme-specific selectors outside `.course-discovery`.
+carries WordPress's `alignfull` class. The stylesheet fills that parent width
+without forcing viewport width or using negative breakout margins. Its layout
+responds to the `.course-discovery` component's inline size with container
+queries, with equivalent viewport media queries as a compatibility fallback.
+This preserves the theme's ownership of content width, header, and page title;
+the plugin does not target theme-specific selectors outside
+`.course-discovery`. A theme or manually selected page template can therefore
+choose a narrow, wide, or full-width slot without plugin CSS escaping it.
 
 ## Supported data mapping
 
@@ -33,10 +34,13 @@ not target theme-specific selectors outside `.course-discovery`.
 | Location row | Locations derived from related Providers |
 | Calendar row | Canonical Course start months |
 | Person row | Related Instructors |
-| Price footer | Canonical decimal price, without an assumed currency |
+| Price footer | User-friendly amount and currency for GBP, EUR, or USD |
 
 All values are prepared by `CourseResultPresenter` and escaped in the template.
-The template performs no metadata, taxonomy, request, or search queries.
+Money is formatted in the presentation layer with the explicit symbols `£`,
+`€`, and `$`; the ISO code remains part of prepared data where the symbol alone
+could be ambiguous. The template performs no metadata, taxonomy, request, or
+search queries.
 
 ## Visual system
 
@@ -49,16 +53,20 @@ The adapted UI follows the export's main visual decisions:
 - system typography beginning with Inter when it is already available;
 - rounded search, filter, card, chip, and pagination shapes;
 - soft ambient card shadows with a reduced-motion-safe hover lift;
-- a flexible metadata grid that collapses from three columns to one;
-- a sticky desktop filter panel and a full-height mobile drawer below 768px.
+- a flexible metadata grid that collapses from three columns to one according
+  to component width;
+- a sticky wide-layout filter panel and a full-height drawer when the viewport
+  is below 768px.
 
 Frontend assets use the plugin version as their cache key. Visual releases must
 increment that version so updated shortcode markup is never paired with stale
 CSS or JavaScript from a previous browser cache.
 
-The desktop result column stays primary while filters remain visible at the
-right. On mobile, JavaScript hides the filter panel until the filter control is
-activated. Without JavaScript the same native GET form remains present in the
+The wide result column stays primary while filters remain visible at the right.
+At narrow component widths, results and the inline filter panel stack even when
+the surrounding viewport is wide. When the viewport itself is below 768px,
+JavaScript hides that panel until the filter control is activated and presents
+it as a modal drawer. Without JavaScript the same native GET form remains in the
 document and usable after the results.
 
 ## Interaction and accessibility
@@ -84,7 +92,7 @@ content model does not support them:
 - provider logos, course images, and decorative institution branding;
 - duration, schedule, delivery mode, study level, or rolling enrolment;
 - application, enrolment, save, and Course detail actions;
-- price range filtering or an assumed currency;
+- price ranges, multiple offers, conversion, or exchange rates;
 - sort choices beyond the existing deterministic result order;
 - result counts per individual filter option.
 

@@ -11,11 +11,13 @@ namespace OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content;
 
 use InvalidArgumentException;
 use OxfordInternational\CourseDiscovery\Domain\Course\CourseId;
+use OxfordInternational\CourseDiscovery\Domain\Course\Currency;
 use OxfordInternational\CourseDiscovery\Domain\Course\Price;
 use OxfordInternational\CourseDiscovery\Domain\Course\StartDate;
 use OxfordInternational\CourseDiscovery\Domain\Instructor\InstructorId;
 use OxfordInternational\CourseDiscovery\Domain\Provider\ProviderId;
 use RuntimeException;
+use Throwable;
 use UnexpectedValueException;
 
 /**
@@ -31,29 +33,16 @@ final class CourseMetadataStore {
 	 * @throws RuntimeException When WordPress cannot persist the price.
 	 */
 	public function save_price( CourseId $course_id, Price $price ): void {
-		$post_id = $course_id->value();
-		$decimal = $price->decimal();
+		$post_id  = $course_id->value();
+		$snapshot = $this->price_metadata_snapshot( $post_id );
 
-		$updated = update_post_meta(
-			$post_id,
-			CourseMeta::PRICE_KEY,
-			$decimal
-		);
+		try {
+			$this->persist_price_value( $post_id, CourseMeta::PRICE_AMOUNT_KEY, $price->amount() );
+			$this->persist_price_value( $post_id, CourseMeta::PRICE_CURRENCY_KEY, $price->currency()->value );
+		} catch ( RuntimeException $exception ) {
+			$this->restore_price_metadata( $post_id, $snapshot );
 
-		if ( false !== $updated ) {
-			return;
-		}
-
-		$stored = get_post_meta(
-			$post_id,
-			CourseMeta::PRICE_KEY,
-			true
-		);
-
-		if ( $stored !== $decimal ) {
-			throw new RuntimeException(
-				'WordPress could not persist the course price.'
-			);
+			throw $exception;
 		}
 	}
 
@@ -65,11 +54,16 @@ final class CourseMetadataStore {
 	 * @throws RuntimeException When WordPress cannot remove the price.
 	 */
 	public function remove_price( CourseId $course_id ): void {
-		$post_id = $course_id->value();
-		$deleted = delete_post_meta( $post_id, CourseMeta::PRICE_KEY );
+		$post_id  = $course_id->value();
+		$snapshot = $this->price_metadata_snapshot( $post_id );
 
-		if ( false === $deleted && metadata_exists( 'post', $post_id, CourseMeta::PRICE_KEY ) ) {
-			throw new RuntimeException( 'WordPress could not remove the course price.' );
+		try {
+			$this->remove_price_value( $post_id, CourseMeta::PRICE_AMOUNT_KEY );
+			$this->remove_price_value( $post_id, CourseMeta::PRICE_CURRENCY_KEY );
+		} catch ( RuntimeException $exception ) {
+			$this->restore_price_metadata( $post_id, $snapshot );
+
+			throw $exception;
 		}
 	}
 
@@ -81,21 +75,146 @@ final class CourseMetadataStore {
 	 * @throws UnexpectedValueException When the stored value is invalid.
 	 */
 	public function price( CourseId $course_id ): ?Price {
-		if ( ! metadata_exists( 'post', $course_id->value(), CourseMeta::PRICE_KEY ) ) {
+		$post_id         = $course_id->value();
+		$amount_exists   = metadata_exists( 'post', $post_id, CourseMeta::PRICE_AMOUNT_KEY );
+		$currency_exists = metadata_exists( 'post', $post_id, CourseMeta::PRICE_CURRENCY_KEY );
+
+		if ( ! $amount_exists && ! $currency_exists ) {
 			return null;
 		}
 
-		$value = get_post_meta( $course_id->value(), CourseMeta::PRICE_KEY, true );
+		if ( ! $amount_exists || ! $currency_exists ) {
+			throw new UnexpectedValueException( 'Stored course price metadata is incomplete.' );
+		}
 
-		if ( ! is_string( $value ) ) {
-			throw new UnexpectedValueException( 'Stored course price must be a string.' );
+		$amount   = get_post_meta( $post_id, CourseMeta::PRICE_AMOUNT_KEY, true );
+		$currency = get_post_meta( $post_id, CourseMeta::PRICE_CURRENCY_KEY, true );
+
+		if ( ! is_string( $amount ) ) {
+			throw new UnexpectedValueException( 'Stored course price amount must be a string.' );
+		}
+
+		if ( ! is_string( $currency ) ) {
+			throw new UnexpectedValueException( 'Stored course price currency must be a string.' );
+		}
+
+		$currency_value = Currency::tryFrom( $currency );
+
+		if ( null === $currency_value ) {
+			throw new UnexpectedValueException( 'Stored course price currency is unsupported.' );
 		}
 
 		try {
-			return Price::from_decimal( $value );
+			return Price::from_decimal( $amount, $currency_value );
 		} catch ( InvalidArgumentException $exception ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserved validation cause is not output.
-			throw new UnexpectedValueException( 'Stored course price is invalid.', 0, $exception );
+			throw new UnexpectedValueException( 'Stored course price amount is invalid.', 0, $exception );
+		}
+	}
+
+	/**
+	 * Persist one scalar belonging to the Course price pair.
+	 *
+	 * WordPress reports an unchanged value as false, so the stored postcondition
+	 * determines whether that result is a failure.
+	 *
+	 * @param int    $post_id  Course post identifier.
+	 * @param string $meta_key Registered price metadata key.
+	 * @param string $value    Canonical scalar value.
+	 *
+	 * @throws RuntimeException When WordPress cannot persist the value.
+	 */
+	private function persist_price_value( int $post_id, string $meta_key, string $value ): void {
+		$updated = update_post_meta( $post_id, $meta_key, $value );
+
+		if ( false !== $updated ) {
+			return;
+		}
+
+		$stored = get_post_meta( $post_id, $meta_key, true );
+
+		if ( $stored !== $value ) {
+			throw new RuntimeException( 'WordPress could not persist the course price.' );
+		}
+	}
+
+	/**
+	 * Remove one scalar belonging to the Course price pair.
+	 *
+	 * @param int    $post_id  Course post identifier.
+	 * @param string $meta_key Registered price metadata key.
+	 *
+	 * @throws RuntimeException When WordPress cannot remove the value.
+	 */
+	private function remove_price_value( int $post_id, string $meta_key ): void {
+		$deleted = delete_post_meta( $post_id, $meta_key );
+
+		if ( false === $deleted && metadata_exists( 'post', $post_id, $meta_key ) ) {
+			throw new RuntimeException( 'WordPress could not remove the course price.' );
+		}
+	}
+
+	/**
+	 * Capture the exact current pair before a two-key write or removal.
+	 *
+	 * @param int $post_id Course post identifier.
+	 *
+	 * @return array<string, array{exists: bool, value: mixed}>
+	 */
+	private function price_metadata_snapshot( int $post_id ): array {
+		$snapshot = array();
+
+		foreach ( array( CourseMeta::PRICE_AMOUNT_KEY, CourseMeta::PRICE_CURRENCY_KEY ) as $meta_key ) {
+			$exists                = metadata_exists( 'post', $post_id, $meta_key );
+			$snapshot[ $meta_key ] = array(
+				'exists' => $exists,
+				'value'  => $exists ? get_post_meta( $post_id, $meta_key, true ) : null,
+			);
+		}
+
+		return $snapshot;
+	}
+
+	/**
+	 * Best-effort restoration after one half of a price pair operation fails.
+	 *
+	 * The original persistence exception remains authoritative if WordPress also
+	 * rejects a rollback attempt.
+	 *
+	 * @param int                                              $post_id  Course post identifier.
+	 * @param array<string, array{exists: bool, value: mixed}> $snapshot Previous metadata state.
+	 */
+	private function restore_price_metadata( int $post_id, array $snapshot ): void {
+		foreach ( $snapshot as $meta_key => $previous ) {
+			$exists = metadata_exists( 'post', $post_id, $meta_key );
+
+			if ( $previous['exists'] ) {
+				$current = $exists ? get_post_meta( $post_id, $meta_key, true ) : null;
+
+				if ( $exists && $current === $previous['value'] ) {
+					continue;
+				}
+
+				try {
+					update_post_meta( $post_id, $meta_key, $previous['value'] );
+				} catch ( Throwable ) {
+					// Best effort only; preserve the original operation failure.
+					continue;
+				}
+
+				continue;
+			}
+
+			if ( ! $exists ) {
+				continue;
+			}
+
+			try {
+				delete_post_meta( $post_id, $meta_key );
+			} catch ( Throwable ) {
+				// Best effort only; preserve the original operation failure.
+				continue;
+			}
 		}
 	}
 

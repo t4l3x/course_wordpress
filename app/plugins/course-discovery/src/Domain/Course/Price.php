@@ -12,51 +12,72 @@ namespace OxfordInternational\CourseDiscovery\Domain\Course;
 use InvalidArgumentException;
 
 /**
- * Represents a non-negative decimal price without floating-point arithmetic.
+ * Represents an exact non-negative amount in a supported currency.
  */
 final readonly class Price {
 	/**
-	 * Canonical decimal representation.
+	 * Canonical decimal amount.
 	 *
 	 * @var string
 	 */
-	private string $decimal;
+	private string $amount;
 
 	/**
-	 * Create a price from its exact decimal representation.
+	 * Create a price from its exact decimal amount and currency.
 	 *
-	 * Currency and display precision are intentionally outside this value object.
-	 *
-	 * @param string $decimal Decimal price.
+	 * @param string   $amount   Decimal amount.
+	 * @param Currency $currency ISO 4217 currency.
 	 *
 	 * @throws InvalidArgumentException When the value is not a non-negative decimal.
 	 */
-	public static function from_decimal( string $decimal ): self {
-		if ( 1 !== preg_match( '/\A[0-9]+(?:\.[0-9]+)?\z/', $decimal ) ) {
-			throw new InvalidArgumentException( 'A price must be a non-negative decimal string.' );
+	public static function from_decimal( string $amount, Currency $currency ): self {
+		return new self( self::canonicalize_amount( $amount ), $currency );
+	}
+
+	/**
+	 * Validate and canonicalize an exact decimal amount.
+	 *
+	 * This supports scalar persistence boundaries where the amount and currency
+	 * are intentionally stored separately.
+	 *
+	 * @param string $amount Decimal amount.
+	 *
+	 * @throws InvalidArgumentException When the value is not a non-negative decimal.
+	 */
+	public static function canonicalize_amount( string $amount ): string {
+		if ( 1 !== preg_match( '/\A[0-9]+(?:\.[0-9]+)?\z/', $amount ) ) {
+			throw new InvalidArgumentException( 'A price amount must be a non-negative decimal string.' );
 		}
 
-		$parts    = explode( '.', $decimal, 2 );
+		$parts    = explode( '.', $amount, 2 );
 		$whole    = ltrim( $parts[0], '0' );
 		$whole    = '' === $whole ? '0' : $whole;
 		$fraction = isset( $parts[1] ) ? rtrim( $parts[1], '0' ) : '';
 
-		return new self( '' === $fraction ? $whole : $whole . '.' . $fraction );
+		return '' === $fraction ? $whole : $whole . '.' . $fraction;
 	}
 
 	/**
-	 * Return the canonical decimal representation.
+	 * Return the canonical decimal amount.
 	 */
-	public function decimal(): string {
-		return $this->decimal;
+	public function amount(): string {
+		return $this->amount;
 	}
 
 	/**
-	 * Store an already validated canonical decimal representation.
+	 * Return the ISO 4217 currency.
+	 */
+	public function currency(): Currency {
+		return $this->currency;
+	}
+
+	/**
+	 * Store an already validated amount and currency.
 	 *
-	 * @param string $decimal Canonical decimal price.
+	 * @param string   $amount   Canonical decimal amount.
+	 * @param Currency $currency ISO 4217 currency.
 	 */
-	private function __construct( string $decimal ) {
-		$this->decimal = $decimal;
+	private function __construct( string $amount, private Currency $currency ) {
+		$this->amount = $amount;
 	}
 }
