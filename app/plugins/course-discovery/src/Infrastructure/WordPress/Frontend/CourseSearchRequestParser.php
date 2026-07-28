@@ -22,8 +22,11 @@ use OxfordInternational\CourseDiscovery\Domain\Provider\ProviderId;
  * Converts untrusted web input to typed search intent.
  */
 final class CourseSearchRequestParser {
-	public const int DEFAULT_PER_PAGE = 12;
-	public const int MAX_PER_PAGE     = 48;
+	public const int DEFAULT_PER_PAGE       = 12;
+	public const int MAX_PER_PAGE           = 48;
+	public const int MAX_PAGE               = 1000;
+	public const int MAX_SEARCH_TERM_LENGTH = 200;
+	public const int MAX_FILTER_VALUES      = 50;
 
 	/**
 	 * Parse an unslashed request array.
@@ -53,7 +56,7 @@ final class CourseSearchRequestParser {
 
 		return new CourseSearchRequest(
 			$criteria,
-			$this->positive_integer( $input['course_page'] ?? $input['page'] ?? null, 1 ),
+			$this->page( $input['course_page'] ?? $input['page'] ?? null ),
 			$this->per_page( $input['per_page'] ?? null )
 		);
 	}
@@ -70,6 +73,16 @@ final class CourseSearchRequestParser {
 
 		$value = sanitize_text_field( $value );
 
+		if ( self::MAX_SEARCH_TERM_LENGTH * 4 < strlen( $value ) ) {
+			return null;
+		}
+
+		$length = preg_match_all( '/./us', $value );
+
+		if ( false === $length || self::MAX_SEARCH_TERM_LENGTH < $length ) {
+			return null;
+		}
+
 		try {
 			return new SearchTerm( $value );
 		} catch ( InvalidArgumentException ) {
@@ -85,7 +98,11 @@ final class CourseSearchRequestParser {
 	 * @return list<int>
 	 */
 	private function positive_integers( mixed $value ): array {
-		$values  = is_array( $value ) ? $value : array( $value );
+		$values  = array_slice(
+			is_array( $value ) ? $value : array( $value ),
+			0,
+			self::MAX_FILTER_VALUES
+		);
 		$parsed  = array();
 		$indexed = array();
 
@@ -109,8 +126,13 @@ final class CourseSearchRequestParser {
 	 * @return list<StartDate>
 	 */
 	private function start_dates( mixed $value ): array {
-		$values = is_array( $value ) ? $value : array( $value );
-		$dates  = array();
+		$values  = array_slice(
+			is_array( $value ) ? $value : array( $value ),
+			0,
+			self::MAX_FILTER_VALUES
+		);
+		$dates   = array();
+		$indexed = array();
 
 		foreach ( $values as $candidate ) {
 			if ( ! is_string( $candidate ) ) {
@@ -118,10 +140,17 @@ final class CourseSearchRequestParser {
 			}
 
 			try {
-				$dates[] = new StartDate( $candidate );
+				$date = new StartDate( $candidate );
 			} catch ( InvalidArgumentException ) {
 				continue;
 			}
+
+			if ( isset( $indexed[ $date->value() ] ) ) {
+				continue;
+			}
+
+			$dates[]                   = $date;
+			$indexed[ $date->value() ] = true;
 		}
 
 		return $dates;
@@ -143,13 +172,14 @@ final class CourseSearchRequestParser {
 	}
 
 	/**
-	 * Parse one positive integer with a fallback.
+	 * Parse a bounded one-based result page.
 	 *
-	 * @param mixed $value    Untrusted value.
-	 * @param int   $fallback Fallback for invalid input.
+	 * @param mixed $value Untrusted page value.
 	 */
-	private function positive_integer( mixed $value, int $fallback ): int {
-		return $this->validated_positive_integer( $value ) ?? $fallback;
+	private function page( mixed $value ): int {
+		$page = $this->validated_positive_integer( $value );
+
+		return null !== $page && self::MAX_PAGE >= $page ? $page : 1;
 	}
 
 	/**

@@ -11,6 +11,7 @@ namespace OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Developme
 
 use InvalidArgumentException;
 use OxfordInternational\CourseDiscovery\Domain\Course\CourseId;
+use OxfordInternational\CourseDiscovery\Domain\Course\Currency;
 use OxfordInternational\CourseDiscovery\Domain\Course\Price;
 use OxfordInternational\CourseDiscovery\Domain\Course\StartDate;
 use OxfordInternational\CourseDiscovery\Domain\Instructor\InstructorId;
@@ -573,6 +574,11 @@ final class CatalogueSeeder {
 			);
 			$course      = new CourseId( $course_id );
 			$price       = sprintf( '%d.%02d', 650 + ( ( $index * 185 ) % 3350 ), ( $index % 4 ) * 25 );
+			$currency    = match ( $index % 3 ) {
+				0 => Currency::GBP,
+				1 => Currency::EUR,
+				2 => Currency::USD,
+			};
 			$providers   = array( $provider_ids[ $index % $provider_count ] );
 			$instructors = array( $instructor_ids[ ( $index * 2 ) % $instructor_count ] );
 			$dates       = array( self::START_DATES[ $index % $date_count ] );
@@ -597,7 +603,7 @@ final class CatalogueSeeder {
 				$dates[] = self::START_DATES[ ( $index + 10 ) % $date_count ];
 			}
 
-			$this->metadata_store->save_price( $course, Price::from_decimal( $price ) );
+			$this->metadata_store->save_price( $course, Price::from_decimal( $price, $currency ) );
 			$this->metadata_store->replace_providers(
 				$course,
 				...array_map( static fn ( int $identifier ): ProviderId => new ProviderId( $identifier ), $providers )

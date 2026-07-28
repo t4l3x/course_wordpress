@@ -11,6 +11,7 @@ namespace OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Admin;
 
 use InvalidArgumentException;
 use OxfordInternational\CourseDiscovery\Domain\Course\CourseId;
+use OxfordInternational\CourseDiscovery\Domain\Course\Currency;
 use OxfordInternational\CourseDiscovery\Domain\Course\Price;
 use OxfordInternational\CourseDiscovery\Domain\Course\StartDate;
 use OxfordInternational\CourseDiscovery\Domain\Instructor\InstructorId;
@@ -173,13 +174,20 @@ final class CourseMetaSaveHandler {
 	 * @throws InvalidArgumentException When the field is missing or invalid.
 	 */
 	private function price_from_request( array $request ): ?Price {
-		$value = $request[ CourseMetaBox::PRICE_FIELD ] ?? null;
+		$amount        = $request[ CourseMetaBox::PRICE_AMOUNT_FIELD ] ?? null;
+		$currency_code = $request[ CourseMetaBox::PRICE_CURRENCY_FIELD ] ?? null;
 
-		if ( ! is_string( $value ) ) {
-			throw new InvalidArgumentException( 'The Course price field is invalid.' );
+		if ( ! is_string( $amount ) || ! is_string( $currency_code ) ) {
+			throw new InvalidArgumentException( 'The Course price fields are invalid.' );
 		}
 
-		return '' === $value ? null : Price::from_decimal( $value );
+		$currency = Currency::tryFrom( $currency_code );
+
+		if ( null === $currency ) {
+			throw new InvalidArgumentException( 'The Course price currency is unsupported.' );
+		}
+
+		return '' === $amount ? null : Price::from_decimal( $amount, $currency );
 	}
 
 	/**

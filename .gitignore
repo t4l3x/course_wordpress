@@ -7,6 +7,7 @@
 # WordPress runtime data
 /database.sql
 /exports/
+/dist/
 /wp-content/
 /*.tar.gz
 /*.zip
@@ -20,6 +21,7 @@
 /app/plugins/course-discovery/.phpunit.cache/
 /app/plugins/course-discovery/.phpunit.result.cache
 /app/plugins/course-discovery/coverage/
+/app/plugins/course-discovery/.dist-build.*/
 
 # Editors and operating systems
 /.idea/

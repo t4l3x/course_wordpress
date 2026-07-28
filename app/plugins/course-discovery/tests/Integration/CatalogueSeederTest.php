@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxfordInternational\CourseDiscovery\Tests\Integration;
 
 use OxfordInternational\CourseDiscovery\Domain\Course\CourseId;
+use OxfordInternational\CourseDiscovery\Domain\Course\Currency;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\CourseCategoryTaxonomy;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\CourseMetadataStore;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\CoursePostType;
@@ -61,6 +62,26 @@ final class CatalogueSeederTest extends WP_UnitTestCase {
 		self::assertCount( 12, $this->post_ids( InstructorPostType::POST_TYPE ) );
 		self::assertInstanceOf( WP_Post::class, $course );
 		self::assertInstanceOf( WP_Post::class, $provider );
+
+		$seeded_currencies = array();
+
+		foreach ( $this->post_ids( CoursePostType::POST_TYPE ) as $seeded_course_id ) {
+			$seeded_price = $store->price( new CourseId( $seeded_course_id ) );
+
+			self::assertNotNull( $seeded_price );
+			$seeded_currencies[ $seeded_price->currency()->value ] = true;
+		}
+
+		ksort( $seeded_currencies );
+
+		self::assertSame(
+			array(
+				Currency::EUR->value => true,
+				Currency::GBP->value => true,
+				Currency::USD->value => true,
+			),
+			$seeded_currencies
+		);
 
 		$course_id = new CourseId( $course->ID );
 

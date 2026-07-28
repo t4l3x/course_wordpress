@@ -103,31 +103,32 @@ final class CourseDiscoveryShortcode {
 		$selected              = $this->selected_values( $criteria );
 		$options               = $this->filter_options->all();
 		$course_discovery_view = array(
-			'instance_id'         => $this->next_instance_id(),
-			'form_action'         => $base_url,
-			'clear_url'           => $base_url,
-			'search_term'         => $criteria->search_term()?->value() ?? '',
-			'per_page'            => $request->per_page(),
-			'active_filter_count' => count( $criteria->providers() )
+			'instance_id'            => $this->next_instance_id(),
+			'form_action'            => $base_url,
+			'clear_url'              => $base_url,
+			'search_term'            => $criteria->search_term()?->value() ?? '',
+			'search_term_max_length' => CourseSearchRequestParser::MAX_SEARCH_TERM_LENGTH,
+			'per_page'               => $request->per_page(),
+			'active_filter_count'    => count( $criteria->providers() )
 				+ count( $criteria->locations() )
 				+ count( $criteria->start_dates() )
 				+ count( $criteria->categories() ),
-			'has_active_filters'  => ! $criteria->is_empty(),
-			'selected'            => $selected,
-			'options'             => $options,
-			'active_filters'      => $this->active_filters(
+			'has_active_filters'     => ! $criteria->is_empty(),
+			'selected'               => $selected,
+			'options'                => $options,
+			'active_filters'         => $this->active_filters(
 				$selected,
 				$options,
 				$criteria,
 				$request->per_page(),
 				$base_url
 			),
-			'courses'             => $this->presenter->prepare( $result ),
-			'total_results'       => $result->total_results(),
-			'empty_message'       => $criteria->is_empty()
+			'courses'                => $this->presenter->prepare( $result ),
+			'total_results'          => $result->total_results(),
+			'empty_message'          => $criteria->is_empty()
 				? __( 'No courses are available yet.', 'course-discovery' )
 				: __( 'No courses match your current filters.', 'course-discovery' ),
-			'pagination'          => $this->pagination(
+			'pagination'             => $this->pagination(
 				$result->current_page(),
 				$result->total_pages(),
 				$base_url,

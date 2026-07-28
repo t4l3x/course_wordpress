@@ -10,11 +10,13 @@ declare(strict_types=1);
 namespace OxfordInternational\CourseDiscovery\Tests\Unit\Domain;
 
 use InvalidArgumentException;
+use OxfordInternational\CourseDiscovery\Domain\Course\Currency;
 use OxfordInternational\CourseDiscovery\Domain\Course\Price;
 use PHPUnit\Framework\TestCase;
+use ValueError;
 
 /**
- * Verifies the currency-neutral price contract.
+ * Verifies the exact amount and supported currency contract.
  */
 final class PriceTest extends TestCase {
 	/**
@@ -26,9 +28,46 @@ final class PriceTest extends TestCase {
 	 * @param string $expected Canonical decimal.
 	 */
 	public function test_price_has_a_canonical_decimal_representation( string $input, string $expected ): void {
-		$price = Price::from_decimal( $input );
+		$price = Price::from_decimal( $input, Currency::GBP );
 
-		self::assertSame( $expected, $price->decimal() );
+		self::assertSame( $expected, $price->amount() );
+		self::assertSame( Currency::GBP, $price->currency() );
+	}
+
+	/**
+	 * Exactly the currently supported ISO 4217 currencies are retained.
+	 *
+	 * @dataProvider supported_currency_provider
+	 *
+	 * @param Currency $currency Supported currency.
+	 */
+	public function test_supported_currencies_are_retained( Currency $currency ): void {
+		$price = Price::from_decimal( '1250.00', $currency );
+
+		self::assertSame( $currency, $price->currency() );
+		self::assertSame( '1250', $price->amount() );
+	}
+
+	/**
+	 * Supported currency examples.
+	 *
+	 * @return array<string, array{Currency}>
+	 */
+	public static function supported_currency_provider(): array {
+		return array(
+			'GBP' => array( Currency::GBP ),
+			'EUR' => array( Currency::EUR ),
+			'USD' => array( Currency::USD ),
+		);
+	}
+
+	/**
+	 * The backed enum accepts no currency outside the supported set.
+	 */
+	public function test_unsupported_currency_is_rejected(): void {
+		$this->expectException( ValueError::class );
+
+		Currency::from( 'CAD' );
 	}
 
 	/**
@@ -59,7 +98,7 @@ final class PriceTest extends TestCase {
 	public function test_invalid_prices_are_rejected( string $value ): void {
 		$this->expectException( InvalidArgumentException::class );
 
-		Price::from_decimal( $value );
+		Price::from_decimal( $value, Currency::GBP );
 	}
 
 	/**

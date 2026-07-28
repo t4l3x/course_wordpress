@@ -6,7 +6,7 @@ ARGS ?=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help init setup up down restart status logs shell wp seed composer composer-install composer-update composer-validate composer-audit lint cs cs-fix analyse test test-unit test-integration test-feature quality test-database-up db-export db-import reset
+.PHONY: help init setup up down restart status logs shell wp seed composer composer-install composer-update composer-validate composer-audit lint lint-examples js-check cs cs-fix analyse test test-unit test-integration test-feature test-examples quality test-database-up db-export db-import dist reset
 
 help: ## Show available development commands.
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -60,6 +60,12 @@ composer-audit: ## Check locked Composer dependencies for security advisories.
 lint: ## Check syntax in plugin-controlled PHP files.
 	@$(COMPOSE) run --rm --no-deps composer run lint
 
+lint-examples: ## Check PHP syntax in the optional example extensions.
+	@$(COMPOSE) run --rm --no-deps --entrypoint sh --volume "$(CURDIR)/examples:/examples:ro" composer -c 'find /examples -type f -name "*.php" -exec php -l {} \;'
+
+js-check: ## Check syntax in plugin-owned vanilla JavaScript files.
+	@$(COMPOSE) run --rm --no-deps --entrypoint sh node -c 'find assets/js -type f -name "*.js" -exec node --check {} \;'
+
 cs: ## Check the plugin against WordPress coding standards.
 	@$(COMPOSE) run --rm --no-deps composer run cs
 
@@ -69,7 +75,7 @@ cs-fix: ## Fix automatically correctable coding-standard violations.
 analyse: ## Run WordPress-aware PHPStan analysis.
 	@$(COMPOSE) run --rm --no-deps composer run analyse
 
-test: test-database-up ## Run all plugin test suites.
+test: test-database-up test-examples ## Run all plugin and example test suites.
 	@$(COMPOSE) run --rm --no-deps composer run test
 
 test-unit: ## Run isolated unit tests without WordPress.
@@ -81,7 +87,10 @@ test-integration: test-database-up ## Run tests that boot WordPress.
 test-feature: test-database-up ## Run feature tests in WordPress.
 	@$(COMPOSE) run --rm --no-deps composer run test:feature
 
-quality: test-database-up ## Run the complete plugin quality pipeline.
+test-examples: test-database-up ## Run behavioral tests for optional example extensions.
+	@$(COMPOSE) run --rm --no-deps --volume "$(CURDIR)/examples:/examples:ro" composer exec -- phpunit --configuration=/app/phpunit.xml.dist --bootstrap=/app/tests/bootstrap/integration.php /examples/course-discovery-price-ceiling/tests
+
+quality: test-database-up lint-examples js-check test-examples ## Run the complete repository quality pipeline.
 	@$(COMPOSE) run --rm --no-deps composer run quality
 
 test-database-up:
@@ -89,13 +98,18 @@ test-database-up:
 
 db-export: ## Export the database. Override with FILE=exports/database.sql.
 	@mkdir -p "$(dir $(FILE))"
-	@$(COMPOSE) exec -T database sh -c 'MARIADB_PWD="$${MARIADB_PASSWORD}" exec mariadb-dump --single-transaction --quick --skip-lock-tables --user="$${MARIADB_USER}" "$${MARIADB_DATABASE}"' > "$(FILE)"
+	@$(COMPOSE) exec -T database sh -c 'MYSQL_PWD="$${MARIADB_PASSWORD}" exec mariadb-dump --single-transaction --quick --skip-lock-tables --user="$${MARIADB_USER}" "$${MARIADB_DATABASE}"' > "$(FILE)"
 	@printf 'Database exported to %s\n' "$(FILE)"
 
 db-import: ## Import FILE into the local database.
 	@test -f "$(FILE)" || { printf 'Database file not found: %s\n' "$(FILE)" >&2; exit 1; }
-	@$(COMPOSE) exec -T database sh -c 'MARIADB_PWD="$${MARIADB_PASSWORD}" exec mariadb --user="$${MARIADB_USER}" "$${MARIADB_DATABASE}"' < "$(FILE)"
+	@$(COMPOSE) exec -T database sh -c 'MYSQL_PWD="$${MARIADB_PASSWORD}" exec mariadb --user="$${MARIADB_USER}" "$${MARIADB_DATABASE}"' < "$(FILE)"
 	@printf 'Database imported from %s\n' "$(FILE)"
+
+dist: ## Build the reviewer-ready plugin ZIP and database export under dist/.
+	@rm -f -- dist/course-discovery.zip dist/database.sql
+	@$(MAKE) --no-print-directory db-export FILE=dist/database.sql
+	@./scripts/build-dist.sh
 
 reset: ## Delete local containers and database volumes after confirmation.
 	@./scripts/reset.sh

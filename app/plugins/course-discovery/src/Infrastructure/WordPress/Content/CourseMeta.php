@@ -10,19 +10,25 @@ declare(strict_types=1);
 namespace OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content;
 
 use InvalidArgumentException;
+use OxfordInternational\CourseDiscovery\Domain\Course\Currency;
 use OxfordInternational\CourseDiscovery\Domain\Course\Price;
 use OxfordInternational\CourseDiscovery\Domain\Course\StartDate;
 use OxfordInternational\CourseDiscovery\Domain\Instructor\InstructorId;
 use OxfordInternational\CourseDiscovery\Domain\Provider\ProviderId;
+use stdClass;
+use WP_Error;
+use WP_REST_Request;
 
 /**
  * Registers explicit scalar metadata contracts for courses.
  */
 final class CourseMeta {
-	public const string PRICE_KEY         = '_course_discovery_price';
-	public const string PROVIDER_ID_KEY   = '_course_discovery_provider_id';
-	public const string INSTRUCTOR_ID_KEY = '_course_discovery_instructor_id';
-	public const string START_DATE_KEY    = '_course_discovery_start_date';
+	public const string LEGACY_PRICE_KEY   = '_course_discovery_price';
+	public const string PRICE_AMOUNT_KEY   = '_course_discovery_price_amount';
+	public const string PRICE_CURRENCY_KEY = '_course_discovery_price_currency';
+	public const string PROVIDER_ID_KEY    = '_course_discovery_provider_id';
+	public const string INSTRUCTOR_ID_KEY  = '_course_discovery_instructor_id';
+	public const string START_DATE_KEY     = '_course_discovery_start_date';
 
 	/**
 	 * Register all course metadata contracts.
@@ -30,20 +36,44 @@ final class CourseMeta {
 	public function register(): void {
 		register_post_meta(
 			CoursePostType::POST_TYPE,
-			self::PRICE_KEY,
+			self::PRICE_AMOUNT_KEY,
 			array(
 				'description'       => __(
-					'Canonical decimal course price; no currency is implied.',
+					'Canonical decimal amount for the Course price.',
 					'course-discovery'
 				),
 				'type'              => 'string',
 				'single'            => true,
-				'sanitize_callback' => array( self::class, 'sanitize_price' ),
+				'sanitize_callback' => array( self::class, 'sanitize_price_amount' ),
 				'auth_callback'     => array( self::class, 'can_edit_course' ),
 				'show_in_rest'      => array(
 					'schema' => array(
 						'type'    => 'string',
 						'pattern' => '^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$',
+					),
+				),
+			)
+		);
+
+		register_post_meta(
+			CoursePostType::POST_TYPE,
+			self::PRICE_CURRENCY_KEY,
+			array(
+				'description'       => __(
+					'ISO 4217 currency for the Course price.',
+					'course-discovery'
+				),
+				'type'              => 'string',
+				'single'            => true,
+				'sanitize_callback' => array( self::class, 'sanitize_price_currency' ),
+				'auth_callback'     => array( self::class, 'can_edit_course' ),
+				'show_in_rest'      => array(
+					'schema' => array(
+						'type' => 'string',
+						'enum' => array_map(
+							static fn ( Currency $currency ): string => $currency->value,
+							Currency::cases()
+						),
 					),
 				),
 			)
@@ -111,21 +141,113 @@ final class CourseMeta {
 				),
 			)
 		);
+
+		add_filter(
+			'rest_pre_insert_' . CoursePostType::POST_TYPE,
+			array( self::class, 'validate_rest_price_pair' ),
+			10,
+			2
+		);
 	}
 
 	/**
-	 * Canonicalize a price before WordPress stores it.
+	 * Require REST price mutations to leave either a complete valid pair or no pair.
+	 *
+	 * One scalar may be updated when the other already exists and is valid. A new
+	 * price needs both scalars, while clearing a price requires both null values.
+	 *
+	 * @param stdClass|WP_Error $prepared_post Prepared Course post data or an earlier validation error.
+	 * @param WP_REST_Request   $request       Current REST request.
+	 */
+	public static function validate_rest_price_pair(
+		stdClass|WP_Error $prepared_post,
+		WP_REST_Request $request
+	): stdClass|WP_Error {
+		if ( $prepared_post instanceof WP_Error ) {
+			return $prepared_post;
+		}
+
+		$meta = $request->get_param( 'meta' );
+
+		if ( ! is_array( $meta ) ) {
+			return $prepared_post;
+		}
+
+		$amount_provided   = array_key_exists( self::PRICE_AMOUNT_KEY, $meta );
+		$currency_provided = array_key_exists( self::PRICE_CURRENCY_KEY, $meta );
+
+		if ( ! $amount_provided && ! $currency_provided ) {
+			return $prepared_post;
+		}
+
+		$post_id         = self::rest_post_id( $request );
+		$amount_exists   = 0 < $post_id && metadata_exists( 'post', $post_id, self::PRICE_AMOUNT_KEY );
+		$currency_exists = 0 < $post_id && metadata_exists( 'post', $post_id, self::PRICE_CURRENCY_KEY );
+		$amount          = $amount_provided
+			? $meta[ self::PRICE_AMOUNT_KEY ]
+			: ( $amount_exists ? get_post_meta( $post_id, self::PRICE_AMOUNT_KEY, true ) : null );
+		$currency        = $currency_provided
+			? $meta[ self::PRICE_CURRENCY_KEY ]
+			: ( $currency_exists ? get_post_meta( $post_id, self::PRICE_CURRENCY_KEY, true ) : null );
+		$amount_exists   = $amount_provided ? null !== $amount : $amount_exists;
+		$currency_exists = $currency_provided ? null !== $currency : $currency_exists;
+
+		if ( $amount_exists !== $currency_exists ) {
+			return self::invalid_rest_price(
+				__( 'Course price amount and currency must be written or cleared together.', 'course-discovery' )
+			);
+		}
+
+		if ( ! $amount_exists ) {
+			return $prepared_post;
+		}
+
+		try {
+			self::sanitize_price_amount( $amount );
+			self::sanitize_price_currency( $currency );
+		} catch ( InvalidArgumentException ) {
+			return self::invalid_rest_price(
+				__( 'Course price amount or currency is invalid.', 'course-discovery' )
+			);
+		}
+
+		return $prepared_post;
+	}
+
+	/**
+	 * Canonicalize a price amount before WordPress stores it.
 	 *
 	 * @param mixed $value Untrusted metadata value.
 	 *
 	 * @throws InvalidArgumentException When the value is not a decimal string.
 	 */
-	public static function sanitize_price( mixed $value ): string {
+	public static function sanitize_price_amount( mixed $value ): string {
 		if ( ! is_string( $value ) ) {
-			throw new InvalidArgumentException( 'A price must be provided as a decimal string.' );
+			throw new InvalidArgumentException( 'A price amount must be provided as a decimal string.' );
 		}
 
-		return Price::from_decimal( $value )->decimal();
+		return Price::canonicalize_amount( $value );
+	}
+
+	/**
+	 * Validate a Course price currency before WordPress stores it.
+	 *
+	 * @param mixed $value Untrusted metadata value.
+	 *
+	 * @throws InvalidArgumentException When the value is not a supported ISO 4217 currency.
+	 */
+	public static function sanitize_price_currency( mixed $value ): string {
+		if ( ! is_string( $value ) ) {
+			throw new InvalidArgumentException( 'A price currency must be provided as a string.' );
+		}
+
+		$currency = Currency::tryFrom( $value );
+
+		if ( null === $currency ) {
+			throw new InvalidArgumentException( 'The price currency is not supported.' );
+		}
+
+		return $currency->value;
 	}
 
 	/**
@@ -136,7 +258,7 @@ final class CourseMeta {
 	 * @throws InvalidArgumentException When the value is not a positive integer.
 	 */
 	public static function sanitize_provider_id( mixed $value ): int {
-		return new ProviderId( self::positive_integer( $value ) )->value();
+		return ( new ProviderId( self::positive_integer( $value ) ) )->value();
 	}
 
 	/**
@@ -147,7 +269,7 @@ final class CourseMeta {
 	 * @throws InvalidArgumentException When the value is not a positive integer.
 	 */
 	public static function sanitize_instructor_id( mixed $value ): int {
-		return new InstructorId( self::positive_integer( $value ) )->value();
+		return ( new InstructorId( self::positive_integer( $value ) ) )->value();
 	}
 
 	/**
@@ -162,7 +284,7 @@ final class CourseMeta {
 			throw new InvalidArgumentException( 'A start date must be provided as a string.' );
 		}
 
-		return new StartDate( $value )->value();
+		return ( new StartDate( $value ) )->value();
 	}
 
 	/**
@@ -205,5 +327,29 @@ final class CourseMeta {
 		}
 
 		return $identifier;
+	}
+
+	/**
+	 * Resolve an existing Course ID from an update request.
+	 *
+	 * @param WP_REST_Request $request Current REST request.
+	 */
+	private static function rest_post_id( WP_REST_Request $request ): int {
+		$post_id = $request->get_param( 'id' );
+
+		return is_int( $post_id ) && 0 < $post_id ? $post_id : 0;
+	}
+
+	/**
+	 * Build the stable REST error returned for an invalid logical price.
+	 *
+	 * @param string $message Localized validation message.
+	 */
+	private static function invalid_rest_price( string $message ): WP_Error {
+		return new WP_Error(
+			'course_discovery_invalid_price',
+			$message,
+			array( 'status' => 400 )
+		);
 	}
 }

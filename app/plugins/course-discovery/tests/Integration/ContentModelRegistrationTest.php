@@ -189,19 +189,23 @@ final class ContentModelRegistrationTest extends WP_UnitTestCase {
 
 		$registered_meta = get_registered_meta_keys( 'post', CoursePostType::POST_TYPE );
 		$expected_meta   = array(
-			CourseMeta::PRICE_KEY         => array(
+			CourseMeta::PRICE_AMOUNT_KEY   => array(
 				'type'   => 'string',
 				'single' => true,
 			),
-			CourseMeta::PROVIDER_ID_KEY   => array(
+			CourseMeta::PRICE_CURRENCY_KEY => array(
+				'type'   => 'string',
+				'single' => true,
+			),
+			CourseMeta::PROVIDER_ID_KEY    => array(
 				'type'   => 'integer',
 				'single' => false,
 			),
-			CourseMeta::INSTRUCTOR_ID_KEY => array(
+			CourseMeta::INSTRUCTOR_ID_KEY  => array(
 				'type'   => 'integer',
 				'single' => false,
 			),
-			CourseMeta::START_DATE_KEY    => array(
+			CourseMeta::START_DATE_KEY     => array(
 				'type'   => 'string',
 				'single' => false,
 			),
@@ -219,6 +223,79 @@ final class ContentModelRegistrationTest extends WP_UnitTestCase {
 			self::assertIsArray( $rest_registration['schema'] );
 			self::assertSame( $expected_contract['type'], $rest_registration['schema']['type'] );
 		}
+
+		self::assertSame(
+			array( 'GBP', 'EUR', 'USD' ),
+			$registered_meta[ CourseMeta::PRICE_CURRENCY_KEY ]['show_in_rest']['schema']['enum']
+		);
+		self::assertArrayNotHasKey( CourseMeta::LEGACY_PRICE_KEY, $registered_meta );
+	}
+
+	/**
+	 * Supported currencies and canonical amounts pass the registered boundary.
+	 *
+	 * @dataProvider supported_currency_provider
+	 *
+	 * @param string $currency Supported ISO 4217 currency.
+	 */
+	public function test_price_metadata_accepts_supported_currencies( string $currency ): void {
+		$course_id = self::factory()->post->create(
+			array( 'post_type' => CoursePostType::POST_TYPE )
+		);
+
+		( new CourseMeta() )->register();
+
+		self::assertNotFalse( add_post_meta( $course_id, CourseMeta::PRICE_AMOUNT_KEY, '001250.5000' ) );
+		self::assertNotFalse( add_post_meta( $course_id, CourseMeta::PRICE_CURRENCY_KEY, $currency ) );
+		self::assertSame( '1250.5', get_post_meta( $course_id, CourseMeta::PRICE_AMOUNT_KEY, true ) );
+		self::assertSame( $currency, get_post_meta( $course_id, CourseMeta::PRICE_CURRENCY_KEY, true ) );
+	}
+
+	/**
+	 * Supported currency examples.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function supported_currency_provider(): array {
+		return array(
+			'GBP' => array( 'GBP' ),
+			'EUR' => array( 'EUR' ),
+			'USD' => array( 'USD' ),
+		);
+	}
+
+	/**
+	 * The registered Course price boundary rejects malformed scalars.
+	 *
+	 * @dataProvider invalid_price_metadata_provider
+	 *
+	 * @param string $meta_key Registered price metadata key.
+	 * @param mixed  $value    Invalid external value.
+	 */
+	public function test_price_metadata_rejects_invalid_values( string $meta_key, mixed $value ): void {
+		$course_id = self::factory()->post->create(
+			array( 'post_type' => CoursePostType::POST_TYPE )
+		);
+
+		( new CourseMeta() )->register();
+		$this->expectException( InvalidArgumentException::class );
+
+		add_post_meta( $course_id, $meta_key, $value );
+	}
+
+	/**
+	 * Invalid external Course price examples.
+	 *
+	 * @return array<string, array{string, mixed}>
+	 */
+	public static function invalid_price_metadata_provider(): array {
+		return array(
+			'negative amount'      => array( CourseMeta::PRICE_AMOUNT_KEY, '-1' ),
+			'non-string amount'    => array( CourseMeta::PRICE_AMOUNT_KEY, 1250 ),
+			'unsupported currency' => array( CourseMeta::PRICE_CURRENCY_KEY, 'CAD' ),
+			'lowercase currency'   => array( CourseMeta::PRICE_CURRENCY_KEY, 'gbp' ),
+			'non-string currency'  => array( CourseMeta::PRICE_CURRENCY_KEY, array( 'GBP' ) ),
+		);
 	}
 
 	/**
@@ -269,12 +346,14 @@ final class ContentModelRegistrationTest extends WP_UnitTestCase {
 		wp_set_current_user( $subscriber_id );
 
 		try {
-			self::assertTrue(
-				user_can( $administrator_id, 'edit_post_meta', $course_id, CourseMeta::PRICE_KEY )
-			);
-			self::assertFalse(
-				user_can( $subscriber_id, 'edit_post_meta', $course_id, CourseMeta::PRICE_KEY )
-			);
+			foreach ( array( CourseMeta::PRICE_AMOUNT_KEY, CourseMeta::PRICE_CURRENCY_KEY ) as $meta_key ) {
+				self::assertTrue(
+					user_can( $administrator_id, 'edit_post_meta', $course_id, $meta_key )
+				);
+				self::assertFalse(
+					user_can( $subscriber_id, 'edit_post_meta', $course_id, $meta_key )
+				);
+			}
 		} finally {
 			wp_set_current_user( 0 );
 		}

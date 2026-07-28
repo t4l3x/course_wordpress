@@ -37,20 +37,27 @@ at a boundary that has the necessary use-case context.
 WordPress posts, taxonomies, and metadata are the source of truth for this
 initial version; no custom tables or schema migrations are needed.
 
-A course has one canonical, non-negative decimal price stored as a string so
-business logic does not rely on floating point; no currency is assumed. The
-metadata contract is:
+A Course has at most one `Price`: an exact, non-negative canonical decimal
+amount paired with a supported `Currency` enum case. The currently supported
+ISO 4217 codes are exactly GBP, EUR, and USD. Amounts remain decimal text; no
+floating-point arithmetic, exchange rates, or conversion is involved. Amount
+and currency are persisted independently rather than serializing the value
+object. The metadata contract is:
 
 | Constant | Key | Type and cardinality |
 | --- | --- | --- |
-| `PRICE_KEY` | `_course_discovery_price` | one decimal string |
+| `PRICE_AMOUNT_KEY` | `_course_discovery_price_amount` | one canonical decimal string |
+| `PRICE_CURRENCY_KEY` | `_course_discovery_price_currency` | one `GBP`, `EUR`, or `USD` string |
 | `PROVIDER_ID_KEY` | `_course_discovery_provider_id` | repeatable positive integer |
 | `INSTRUCTOR_ID_KEY` | `_course_discovery_instructor_id` | repeatable positive integer |
 | `START_DATE_KEY` | `_course_discovery_start_date` | repeatable `YYYY-MM` string |
 
-Each provider ID, instructor ID, and start date uses its own metadata row rather
-than an opaque serialized array. `CourseMeta` centralizes the keys and explicit
-WordPress type, sanitization, authorization, and REST contracts.
+The amount and currency rows form one logical optional value; both are needed
+to construct a `Price`. Each Provider ID, Instructor ID, and start date uses its
+own metadata row rather than an opaque serialized array. `CourseMeta`
+centralizes the keys and explicit WordPress type, sanitization, authorization,
+and REST contracts. Currency input is checked against the enum at external
+write boundaries.
 
 WordPress metadata access is isolated in `CourseMetadataStore`, including
 normalization, de-duplication, deterministic date ordering, and replacement of
@@ -58,6 +65,19 @@ repeatable relationships and dates. Callers work with typed domain identifiers,
 `Price`, and `StartDate` values rather than `WP_Post`, `WP_Query`, globals, or
 raw metadata arrays. It is the supported metadata write boundary; registered
 REST schemas and sanitizers reject invalid external input.
+
+REST price mutations are also checked as one logical final state before
+WordPress updates metadata. Creating a price requires amount and currency
+together. One scalar may be updated when the other already exists and is valid,
+while clearing requires both keys to be `null`. A request that would leave only
+one row is rejected without applying either change.
+
+Legacy `_course_discovery_price` rows are not part of the current contract.
+When that old key exists without the new amount and currency pair, reads return
+no Price and do not infer GBP, EUR, or USD. In development, `make seed` safely
+resets and recreates the plugin-owned catalogue in the new representation.
+Manually maintained Courses must be opened and explicitly saved with both
+amount and currency; a leftover legacy row can remain inert.
 
 Registration arguments can be changed through five deliberately narrow filters:
 
@@ -87,16 +107,18 @@ Custom Course metadata follows one write path:
 ```text
 WordPress Course edit form
     -> post type, autosave/revision, nonce, capability, and input validation
-    -> Price, ProviderId, InstructorId, and StartDate values
+    -> Price(amount + Currency), ProviderId, InstructorId, and StartDate values
     -> CourseMetadataStore
     -> WordPress post metadata
 ```
 
 Relationship IDs are checked against their expected WordPress post type before
-they become domain identifiers. The complete submission is validated before
-metadata replacement begins, so invalid input does not partially update the
-Course. Locations do not pass through this flow: they remain terms on Providers
-and are derived for a Course through its Provider relationships.
+they become domain identifiers. Price amount and currency are validated
+together, including the supported-currency enum, before persistence. The
+complete submission is validated before metadata replacement begins, so
+invalid input does not partially update the Course. Locations do not pass
+through this flow: they remain terms on Providers and are derived for a Course
+through its Provider relationships.
 
 ## Course search composition
 
@@ -156,12 +178,13 @@ AND
 (category=5)
 ```
 
-The WordPress text translator uses native `WP_Query` search with explicit
-`post_title`, `post_excerpt`, and `post_content` columns. The Location
-translator first finds Providers carrying any selected Location term and then
-matches Courses carrying any of those Provider relationship IDs. Locations
-remain derived and are never copied to Course metadata. Category translation
-uses `include_children => true`, so selecting a parent Category also includes
+The WordPress executor always constrains discovery to published Course posts.
+Its text translator uses native `WP_Query` search with explicit `post_title`,
+`post_excerpt`, and `post_content` columns. The Location translator first finds
+published Providers carrying any selected Location term and then matches
+Courses carrying any of those Provider relationship IDs. Locations remain
+derived and are never copied to Course metadata. Category translation uses
+`include_children => true`, so selecting a parent Category also includes
 Courses assigned to its descendant Categories.
 
 AND across conditions and OR among a condition's selected values are fixed
@@ -222,6 +245,14 @@ keys are rejected instead of silently replacing core behavior. The same
 application search intent can later be translated by `WP_Query`, custom lookup
 tables, or an external search service without weakening its typed criteria.
 
+These hooks extend backend search composition; they are not a generic frontend
+control registry. The plugin-owned shortcode currently parses, renders, and
+preserves Provider, Location, Start Date, and Category controls only. The
+filter-option hooks alter the typed choices for those existing controls but do
+not add a new control. An extension that introduces a custom criterion must
+also own any public input and presentation needed for it. See
+[`extending.md`](extending.md) for complete examples and the exact boundary.
+
 ## Boundaries and evolution
 
 `Plugin` is the composition root. Registration and persistence implementations
@@ -238,6 +269,12 @@ tables later while callers keep the same domain-facing contract. A denormalized
 search projection can likewise be rebuilt from WordPress source data without
 moving WordPress concerns into the domain. Any future custom schema must use
 versioned, repeatable migrations.
+
+The current price model is one Money value composed of exact amount and
+currency. A future `SinglePrice`, `PriceRange`, or multiple-offer model can
+compose those same Money values without changing amount representation. Those
+shapes, a currency database, exchange rates, conversion, locale services, and
+pricing repositories remain intentionally unimplemented.
 
 ## Public frontend boundary
 
@@ -262,14 +299,16 @@ pagination semantics provide the baseline experience. Minimal vanilla
 JavaScript only turns the always-available filter panel into a responsive drawer
 with Escape handling and focus return.
 
-The `.course-discovery` root carries WordPress's `alignfull` class and uses a
-full-viewport CSS breakout to escape common theme content-width constraints.
-The scoped fallback deliberately outranks block-theme constrained-layout rules,
-including their `auto !important` horizontal margins. This is intentionally
-presentation-only: the surrounding theme still owns its header, navigation,
-page title, and page template. A theme that clips all descendant overflow can
-still prevent full bleed and must opt into a wider template, but no
-theme-specific selector or template metadata is added.
+The generated block and `.course-discovery` root carry WordPress's native
+`alignfull` signal. Plugin CSS fills the width its parent makes available; it
+does not force viewport width, use negative breakout margins, or override theme
+layout globally. Container queries adapt the result/filter grid, card metadata,
+and compact controls to the shortcode's actual inline size. Equivalent media
+queries remain a browser fallback and keep the viewport-based JavaScript drawer
+behavior aligned below 768px. In a narrow component within a wider viewport,
+the filters remain an inline, usable part of the GET form rather than becoming
+a modal drawer. The surrounding theme still owns the available page width,
+header, navigation, page title, and page template.
 
 `CourseFilterOptions` loads published Providers, Location terms, distinct
 canonical Course start months, and hierarchical Course Categories. Start months
@@ -278,6 +317,11 @@ value, and formatted for display. `CourseResultPresenter` bulk-loads result and
 relationship posts so the template receives prepared values and performs no
 search, metadata, taxonomy, or request access. Locations continue to be derived
 from published related Providers.
+
+Course money formatting belongs to the frontend presentation adapter. It maps
+the three supported currencies to their symbols and retains the ISO code in
+prepared data where disambiguation is useful; persistence stores only the exact
+amount text and currency code.
 
 The local Stitch export in
 `app/plugins/course-discovery/stitch_university_course_discovery_portal` informs
@@ -293,9 +337,10 @@ sample JavaScript are not plugin dependencies.
 The `course-discovery seed` WP-CLI command is registered only for WP-CLI and
 refuses to mutate data unless `wp_get_environment_type()` is `local` or
 `development`. The generator creates native posts and taxonomy terms, then uses
-`CourseMetadataStore` for price, Provider, Instructor, and start-month writes.
-Locations remain attached to Providers and Course Categories remain native term
-relationships.
+`CourseMetadataStore` for Price, Provider, Instructor, and start-month writes.
+Its deterministic Courses cycle through GBP, EUR, and USD so every supported
+currency is represented. Locations remain attached to Providers and Course
+Categories remain native term relationships.
 
 Seed posts and terms carry a private development ownership marker so repeated
 runs upsert deterministic slugs and `--reset` deletes only demo-owned data. The

@@ -11,6 +11,7 @@ namespace OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend;
 
 use OxfordInternational\CourseDiscovery\Application\Search\CourseSearchResult;
 use OxfordInternational\CourseDiscovery\Domain\Course\CourseId;
+use OxfordInternational\CourseDiscovery\Domain\Course\Price;
 use OxfordInternational\CourseDiscovery\Domain\Course\StartDate;
 use OxfordInternational\CourseDiscovery\Domain\Instructor\InstructorId;
 use OxfordInternational\CourseDiscovery\Domain\Provider\ProviderId;
@@ -32,10 +33,12 @@ final class CourseResultPresenter {
 	/**
 	 * Create the Course result presenter.
 	 *
-	 * @param CourseMetadataStore $metadata_store Course metadata read boundary.
+	 * @param CourseMetadataStore  $metadata_store  Course metadata read boundary.
+	 * @param CoursePriceFormatter $price_formatter Exact Course price formatter.
 	 */
 	public function __construct(
-		private CourseMetadataStore $metadata_store
+		private CourseMetadataStore $metadata_store,
+		private CoursePriceFormatter $price_formatter
 	) {
 	}
 
@@ -49,6 +52,7 @@ final class CourseResultPresenter {
 	 *     name: string,
 	 *     short_description: string,
 	 *     price: ?string,
+	 *     price_currency: ?string,
 	 *     providers: list<string>,
 	 *     locations: list<string>,
 	 *     instructors: list<string>,
@@ -82,7 +86,7 @@ final class CourseResultPresenter {
 		 *
 		 * @var array<int, array{
 		 *     post: WP_Post,
-		 *     price: ?string,
+		 *     price: ?Price,
 		 *     provider_ids: list<int>,
 		 *     instructor_ids: list<int>,
 		 *     start_dates: list<StartDate>
@@ -95,26 +99,38 @@ final class CourseResultPresenter {
 			$course_id = new CourseId( $post->ID );
 
 			try {
-				$price          = $this->metadata_store->price( $course_id );
-				$provider_ids   = array_map(
+				$price = $this->metadata_store->price( $course_id );
+			} catch ( UnexpectedValueException ) {
+				$price = null;
+			}
+
+			try {
+				$provider_ids = array_map(
 					static fn ( ProviderId $provider_id ): int => $provider_id->value(),
 					$this->metadata_store->providers( $course_id )
 				);
+			} catch ( UnexpectedValueException ) {
+				$provider_ids = array();
+			}
+
+			try {
 				$instructor_ids = array_map(
 					static fn ( InstructorId $instructor_id ): int => $instructor_id->value(),
 					$this->metadata_store->instructors( $course_id )
 				);
-				$start_dates    = $this->metadata_store->start_dates( $course_id );
 			} catch ( UnexpectedValueException ) {
-				$price          = null;
-				$provider_ids   = array();
 				$instructor_ids = array();
-				$start_dates    = array();
+			}
+
+			try {
+				$start_dates = $this->metadata_store->start_dates( $course_id );
+			} catch ( UnexpectedValueException ) {
+				$start_dates = array();
 			}
 
 			$courses[ $post->ID ] = array(
 				'post'           => $post,
-				'price'          => null === $price ? null : $price->decimal(),
+				'price'          => $price,
 				'provider_ids'   => $provider_ids,
 				'instructor_ids' => $instructor_ids,
 				'start_dates'    => $start_dates,
@@ -146,7 +162,10 @@ final class CourseResultPresenter {
 					? __( 'Untitled Course', 'course-discovery' )
 					: $title,
 				'short_description' => trim( wp_strip_all_tags( $post->post_excerpt, true ) ),
-				'price'             => $course['price'],
+				'price'             => null === $course['price']
+					? null
+					: $this->price_formatter->format( $course['price'] ),
+				'price_currency'    => $course['price']?->currency()->value,
 				'providers'         => $this->related_names(
 					$provider_ids,
 					ProviderPostType::POST_TYPE,

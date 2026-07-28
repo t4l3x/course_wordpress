@@ -84,6 +84,73 @@ final class CourseDiscoveryFrontendBoundaryTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Oversized public search and pagination values fall back safely.
+	 */
+	public function test_oversized_search_and_page_values_are_rejected(): void {
+		$parser  = new CourseSearchRequestParser();
+		$valid   = $parser->parse(
+			array(
+				'q'           => str_repeat( 'ə', CourseSearchRequestParser::MAX_SEARCH_TERM_LENGTH ),
+				'course_page' => (string) CourseSearchRequestParser::MAX_PAGE,
+			)
+		);
+		$invalid = $parser->parse(
+			array(
+				'q'           => str_repeat( 'a', CourseSearchRequestParser::MAX_SEARCH_TERM_LENGTH + 1 ),
+				'course_page' => (string) ( CourseSearchRequestParser::MAX_PAGE + 1 ),
+			)
+		);
+
+		self::assertSame(
+			CourseSearchRequestParser::MAX_SEARCH_TERM_LENGTH,
+			preg_match_all( '/./us', $valid->criteria()->search_term()?->value() ?? '' )
+		);
+		self::assertSame( CourseSearchRequestParser::MAX_PAGE, $valid->page() );
+		self::assertNull( $invalid->criteria()->search_term() );
+		self::assertSame( 1, $invalid->page() );
+	}
+
+	/**
+	 * Public multi-select values are deduplicated and bounded.
+	 */
+	public function test_filter_value_lists_are_deduplicated_and_bounded(): void {
+		$parser = new CourseSearchRequestParser();
+		$input  = range( 1, CourseSearchRequestParser::MAX_FILTER_VALUES + 10 );
+
+		$request = $parser->parse(
+			array(
+				'provider'   => $input,
+				'location'   => $input,
+				'category'   => $input,
+				'start_date' => array_merge(
+					array( '2026-01', '2026-01' ),
+					array_fill( 0, CourseSearchRequestParser::MAX_FILTER_VALUES, '2026-02' )
+				),
+			)
+		);
+
+		self::assertCount(
+			CourseSearchRequestParser::MAX_FILTER_VALUES,
+			$request->criteria()->providers()
+		);
+		self::assertCount(
+			CourseSearchRequestParser::MAX_FILTER_VALUES,
+			$request->criteria()->locations()
+		);
+		self::assertCount(
+			CourseSearchRequestParser::MAX_FILTER_VALUES,
+			$request->criteria()->categories()
+		);
+		self::assertSame(
+			array( '2026-01', '2026-02' ),
+			array_map(
+				static fn ( StartDate $date ): string => $date->value(),
+				$request->criteria()->start_dates()
+			)
+		);
+	}
+
+	/**
 	 * Core options use published Providers, all terms, and distinct ordered dates.
 	 */
 	public function test_filter_options_are_typed_deduplicated_and_hierarchical(): void {

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxfordInternational\CourseDiscovery\Tests\Integration;
 
 use OxfordInternational\CourseDiscovery\Domain\Course\CourseId;
+use OxfordInternational\CourseDiscovery\Domain\Course\Currency;
 use OxfordInternational\CourseDiscovery\Domain\Course\Price;
 use OxfordInternational\CourseDiscovery\Domain\Course\StartDate;
 use OxfordInternational\CourseDiscovery\Domain\Instructor\InstructorId;
@@ -38,7 +39,7 @@ final class CourseMetaBoxTest extends WP_UnitTestCase {
 		$store         = new CourseMetadataStore();
 		$course        = new CourseId( $course_id );
 
-		$store->save_price( $course, Price::from_decimal( '125.50' ) );
+		$store->save_price( $course, Price::from_decimal( '125.50', Currency::EUR ) );
 		$store->replace_providers( $course, new ProviderId( $provider_id ) );
 		$store->replace_instructors( $course, new InstructorId( $instructor_id ) );
 		$store->replace_start_dates(
@@ -63,11 +64,16 @@ final class CourseMetaBoxTest extends WP_UnitTestCase {
 			'name="' . CourseMetaBox::NONCE_NAME . '"',
 			$course_html
 		);
-		self::assertStringContainsString( '<label for="course-discovery-price">', $course_html );
+		self::assertStringContainsString( '<label for="course-discovery-price-amount">', $course_html );
+		self::assertStringContainsString( '<label for="course-discovery-price-currency">', $course_html );
 		self::assertStringContainsString( '<label for="course-discovery-providers">', $course_html );
 		self::assertStringContainsString( '<label for="course-discovery-instructors">', $course_html );
 		self::assertStringContainsString(
-			'name="' . CourseMetaBox::PRICE_FIELD . '"',
+			'name="' . CourseMetaBox::PRICE_AMOUNT_FIELD . '"',
+			$course_html
+		);
+		self::assertStringContainsString(
+			'name="' . CourseMetaBox::PRICE_CURRENCY_FIELD . '"',
 			$course_html
 		);
 		self::assertStringContainsString(
@@ -91,9 +97,16 @@ final class CourseMetaBoxTest extends WP_UnitTestCase {
 		self::assertStringContainsString( 'Add start month', $course_html );
 		self::assertStringContainsString( 'Remove start month', $course_html );
 		self::assertStringContainsString( 'value="125.5"', $course_html );
+		self::assertStringContainsString( 'value="GBP"', $course_html );
+		self::assertStringContainsString( 'value="EUR"', $course_html );
+		self::assertStringContainsString( 'value="USD"', $course_html );
+		self::assertMatchesRegularExpression(
+			'/value="EUR"\s+selected=\'selected\'/',
+			$course_html
+		);
 		self::assertStringContainsString( 'value="' . $provider_id . '"', $course_html );
 		self::assertStringContainsString( 'value="' . $instructor_id . '"', $course_html );
-		self::assertSame( 2, substr_count( $course_html, "selected='selected'" ) );
+		self::assertSame( 3, substr_count( $course_html, "selected='selected'" ) );
 		self::assertStringContainsString( 'value="2026-09"', $course_html );
 		self::assertStringContainsString( 'value="2027-01"', $course_html );
 		self::assertStringContainsString( 'Provider &amp; Partners', $course_html );
@@ -112,8 +125,10 @@ final class CourseMetaBoxTest extends WP_UnitTestCase {
 			self::assertStringNotContainsString( $meta_box_id, $provider_html );
 			self::assertStringNotContainsString( $meta_box_id, $instructor_html );
 		}
-		self::assertStringNotContainsString( CourseMetaBox::PRICE_FIELD, $provider_html );
-		self::assertStringNotContainsString( CourseMetaBox::PRICE_FIELD, $instructor_html );
+		self::assertStringNotContainsString( CourseMetaBox::PRICE_AMOUNT_FIELD, $provider_html );
+		self::assertStringNotContainsString( CourseMetaBox::PRICE_AMOUNT_FIELD, $instructor_html );
+		self::assertStringNotContainsString( CourseMetaBox::PRICE_CURRENCY_FIELD, $provider_html );
+		self::assertStringNotContainsString( CourseMetaBox::PRICE_CURRENCY_FIELD, $instructor_html );
 	}
 
 	/**

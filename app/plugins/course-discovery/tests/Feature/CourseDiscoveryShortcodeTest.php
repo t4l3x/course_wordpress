@@ -11,6 +11,7 @@ namespace OxfordInternational\CourseDiscovery\Tests\Feature;
 
 use OxfordInternational\CourseDiscovery\Application\Search\Condition\ProviderCondition;
 use OxfordInternational\CourseDiscovery\Domain\Course\CourseId;
+use OxfordInternational\CourseDiscovery\Domain\Course\Currency;
 use OxfordInternational\CourseDiscovery\Domain\Course\Price;
 use OxfordInternational\CourseDiscovery\Domain\Course\StartDate;
 use OxfordInternational\CourseDiscovery\Domain\Instructor\InstructorId;
@@ -23,6 +24,7 @@ use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\Locatio
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Content\ProviderPostType;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CourseDiscoveryShortcode;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CourseFilterOption;
+use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Frontend\CourseSearchRequestParser;
 use OxfordInternational\CourseDiscovery\Infrastructure\WordPress\Search\WordPressCourseSearchExtensions;
 use WP_UnitTestCase;
 
@@ -40,6 +42,10 @@ final class CourseDiscoveryShortcodeTest extends WP_UnitTestCase {
 
 		self::assertStringContainsString( 'class="course-discovery alignfull"', $output );
 		self::assertStringContainsString( 'Discover your next course', $output );
+		self::assertStringContainsString(
+			'maxlength="' . CourseSearchRequestParser::MAX_SEARCH_TERM_LENGTH . '"',
+			$output
+		);
 		self::assertStringContainsString( '0 courses found', $output );
 		self::assertStringContainsString( 'No courses are available yet.', $output );
 	}
@@ -71,7 +77,8 @@ final class CourseDiscoveryShortcodeTest extends WP_UnitTestCase {
 		self::assertStringContainsString( '1 course found', $output );
 		self::assertStringContainsString( 'Shared Course', $output );
 		self::assertStringContainsString( 'Useful short description', $output );
-		self::assertStringContainsString( '1250.5', $output );
+		self::assertStringContainsString( '$1,250.50', $output );
+		self::assertStringContainsString( '(USD)', $output );
 		self::assertStringContainsString( 'Published Provider', $output );
 		self::assertStringContainsString( 'India', $output );
 		self::assertStringContainsString( 'Course Instructor', $output );
@@ -174,7 +181,10 @@ final class CourseDiscoveryShortcodeTest extends WP_UnitTestCase {
 			);
 			$store     = new CourseMetadataStore();
 
-			$store->save_price( new CourseId( $course_id ), Price::from_decimal( '1250.50' ) );
+			$store->save_price(
+				new CourseId( $course_id ),
+				Price::from_decimal( '1250.50', Currency::USD )
+			);
 			$store->replace_providers( new CourseId( $course_id ), new ProviderId( $provider_id ) );
 			$store->replace_instructors( new CourseId( $course_id ), new InstructorId( $instructor_id ) );
 			$store->replace_start_dates( new CourseId( $course_id ), new StartDate( '2027-01' ) );
