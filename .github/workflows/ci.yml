@@ -172,7 +172,6 @@ jobs:
           --health-timeout=5s
           --health-retries=20
     env:
-      WP_CORE_DIR: ${{ runner.temp }}/wordpress
       WP_TESTS_DIR: ${{ github.workspace }}/app/plugins/course-discovery/vendor/wp-phpunit/wp-phpunit
       WP_TESTS_DB_HOST: 127.0.0.1:3306
       WP_TESTS_DB_NAME: wordpress_test
@@ -185,6 +184,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+      - name: Configure WordPress test path
+        run: echo "WP_CORE_DIR=${RUNNER_TEMP}/wordpress" >> "$GITHUB_ENV"
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -230,7 +231,6 @@ jobs:
           --health-timeout=5s
           --health-retries=20
     env:
-      WP_CORE_DIR: ${{ runner.temp }}/wordpress
       WP_TESTS_DIR: ${{ github.workspace }}/app/plugins/course-discovery/vendor/wp-phpunit/wp-phpunit
       WP_TESTS_DB_HOST: 127.0.0.1:3306
       WP_TESTS_DB_NAME: wordpress_test
@@ -243,6 +243,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+      - name: Configure WordPress test path
+        run: echo "WP_CORE_DIR=${RUNNER_TEMP}/wordpress" >> "$GITHUB_ENV"
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
