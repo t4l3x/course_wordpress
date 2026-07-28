@@ -6,7 +6,7 @@ ARGS ?=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help init setup up down restart status logs shell wp seed composer composer-install composer-update composer-validate composer-audit lint lint-examples js-check cs cs-fix analyse test test-unit test-integration test-feature test-examples quality test-database-up db-export db-import dist reset
+.PHONY: help init setup up down restart status logs shell wp seed composer composer-install composer-update composer-validate composer-audit lint lint-examples js-check cs cs-fix analyse test test-unit test-integration test-feature test-examples test-e2e quality test-database-up db-export db-import dist reset
 
 help: ## Show available development commands.
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -65,6 +65,11 @@ lint-examples: ## Check PHP syntax in the optional example extensions.
 
 js-check: ## Check syntax in plugin-owned vanilla JavaScript files.
 	@$(COMPOSE) run --rm --no-deps --entrypoint sh node -c 'find assets/js -type f -name "*.js" -exec node --check {} \;'
+
+test-e2e: ## Run typed headless Chromium tests against an initialized, seeded application.
+	@$(COMPOSE) run --rm --no-deps --entrypoint npm playwright ci --no-audit --no-fund
+	@$(COMPOSE) run --rm --no-deps --entrypoint npm playwright run test:e2e:typecheck
+	@$(COMPOSE) run --rm --entrypoint npm playwright run test:e2e -- $(ARGS)
 
 cs: ## Check the plugin against WordPress coding standards.
 	@$(COMPOSE) run --rm --no-deps composer run cs

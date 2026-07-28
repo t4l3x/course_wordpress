@@ -3,6 +3,11 @@
 
 # Plugin dependencies and generated assets
 /app/plugins/course-discovery/vendor/
+/node_modules/
+
+# Browser-test output
+/playwright-report/
+/test-results/
 
 # WordPress runtime data
 /database.sql

@@ -21,9 +21,11 @@ Run focused suites while developing and `make quality` before finishing.
   WordPress environment. The price-ceiling proof covers supported input,
   currency isolation, translator registration, and conservative exclusion at
   its exact `DECIMAL(65,30)` boundary.
-- **End-to-end tests** exercise the deployed HTTP/browser stack when a frontend
-  or public API makes that cost worthwhile. They complement rather than replace
-  unit, integration, and feature coverage.
+- **End-to-end tests** use TypeScript and headless Chromium through Playwright
+  against the running, deterministically seeded public catalogue. They cover
+  user-visible rendering, GET search and filtering, pagination, the accessible
+  mobile drawer, and the no-JavaScript baseline. They complement rather than
+  replace lower test layers.
 
 Use:
 
@@ -34,6 +36,41 @@ make test-feature
 make test-examples
 make test
 ```
+
+The browser suite requires the initialized development HTTP stack and seeded
+demo catalogue:
+
+```bash
+make init
+make seed
+make test-e2e
+```
+
+This target installs locked npm dependencies in the Playwright tools container,
+type-checks the TypeScript suite, and runs Chromium headlessly. It is separate
+from `make quality` because browser tests require a running seeded site. The
+seed reset touches only plugin-owned demo records; GitHub Actions uses a fresh
+ephemeral stack.
+
+## End-to-end conventions
+
+- Keep shared environment values and public routes in `tests/e2e/config.ts`.
+  Specs must not read `process.env` directly or duplicate route strings.
+- Name executable tests `*.spec.ts`, keep E2E support code under `tests/e2e`,
+  and pass strict TypeScript checking before starting a browser.
+- Seed deterministic demo data before the suite. Tests should remain
+  independent, anonymous, and read-only unless a scenario explicitly owns its
+  cleanup.
+- Prefer accessible role, label, and visible-text locators. Use
+  `[data-course-discovery]` only to scope the plugin surface; do not couple
+  assertions to layout CSS.
+- Use Playwright web-first assertions and navigation waits instead of fixed
+  sleeps.
+- Test the server-rendered no-JavaScript baseline separately from progressively
+  enhanced behavior.
+- Keep the Playwright package and Docker image versions identical. Run
+  headlessly by default and use retry traces and failure screenshots for
+  diagnosis.
 
 Integration and feature suites must use the isolated test database configured
 by the project, never a development or production database.
@@ -49,15 +86,18 @@ GitHub Actions keeps failures attributable to one quality layer. Separate jobs
 run strict Composer validation, locked-dependency audit, PHP syntax checks,
 WordPress Coding Standards, PHPStan, unit tests, real-WordPress integration
 tests, optional example integration tests, feature tests, and vanilla
-JavaScript syntax checks. PHP lint includes the optional example plugin and
+JavaScript syntax checks. A separate Playwright job provisions and seeds the
+full HTTP stack, type-checks the E2E suite, runs Chromium headlessly, and uploads
+the report and retry traces. PHP lint includes the optional example plugin and
 distribution helper rather than checking only production plugin classes.
 
 The supported runtime minimum is PHP 8.3; Docker development remains on PHP
 8.5. Unit tests run on PHP 8.3, 8.4, and 8.5. Integration tests run on PHP 8.3
 and 8.5 with WordPress 7.0.2 and an isolated MariaDB 12.3.2 service. Feature
 tests run the same real stack on PHP 8.5, and JavaScript syntax is checked with
-Node 22.23.1. This matrix checks the minimum and development runtime without
-claiming that isolated unit tests alone prove WordPress compatibility.
+Node 22.23.1. Browser coverage uses Playwright 1.62.0 with its matching Chromium
+build. This matrix checks the minimum and development runtime without claiming
+that isolated unit tests alone prove WordPress compatibility.
 
 ## Risk and regression coverage
 
