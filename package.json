@@ -1,0 +1,16 @@
+{
+  "name": "oxford-course-discovery-e2e",
+  "private": true,
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:typecheck": "tsc --project tsconfig.playwright.json --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.0",
+    "@types/node": "22.20.1",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

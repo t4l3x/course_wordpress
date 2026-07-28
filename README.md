@@ -80,6 +80,7 @@ pagination. Use `make up` to start an already initialized environment later.
 | `make test-integration` | Run tests with WordPress and the isolated test database |
 | `make test-feature` | Run feature tests with WordPress |
 | `make test-examples` | Run real-WordPress behavior tests for optional examples |
+| `make test-e2e` | Type-check and run headless Chromium tests against the seeded site |
 | `make test` | Run all plugin and example test suites |
 | `make quality` | Run the complete non-destructive quality pipeline |
 | `make dist` | Build the reviewer plugin ZIP and database snapshot in `dist/` |
@@ -118,6 +119,23 @@ composer run quality
 Unit tests are isolated and do not load WordPress. Integration and feature tests
 load the WordPress test framework and use a separate disposable database. The
 root Make targets start this database automatically.
+
+The TypeScript Playwright suite exercises the running public catalogue in
+headless Chromium. Initialize and seed the development site before running it:
+
+```bash
+make init
+make seed
+make test-e2e
+```
+
+`make test-e2e` installs the locked root npm dependencies in the Playwright
+tools container, type-checks the tests, and runs them against the local HTTP
+stack. It remains separate from `make quality` because it requires an
+initialized site and deterministic demo data. CI creates a fresh stack for it.
+Shared configuration, selectors, isolation, and debugging practices are
+documented in the
+[end-to-end testing conventions](docs/testing.md#end-to-end-conventions).
 
 For standalone integration testing outside this Docker project, provide:
 
@@ -363,6 +381,7 @@ production migration or public release asset. See
 ├── .github/workflows/
 ├── docs/
 ├── examples/
+├── tests/e2e/
 ├── app/plugins/course-discovery/
 │   ├── assets/
 │   ├── src/
@@ -379,5 +398,8 @@ production migration or public release asset. See
 ├── AGENTS.md
 ├── compose.yaml
 ├── Makefile
+├── package.json
+├── playwright.config.ts
+├── tsconfig.playwright.json
 └── README.md
 ```
